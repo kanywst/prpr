@@ -1,0 +1,389 @@
+package ui
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/kanywst/prpr/internal/gh"
+)
+
+// fakeFetcher serves canned responses, one page per refresh, so tests can walk
+// a model through a sequence of refreshes without touching the network.
+type fakeFetcher struct {
+	me     string
+	orgs   []string
+	pages  [][]gh.PR
+	calls  int
+	states map[string]gh.State
+	err    error
+}
+
+func (f *fakeFetcher) Viewer(context.Context) (login string, orgs []string, err error) {
+	if f.err != nil {
+		return "", nil, f.err
+	}
+	return f.me, f.orgs, nil
+}
+
+func (f *fakeFetcher) SearchOpenPRs(context.Context, []string) ([]gh.PR, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	page := f.pages[min(f.calls, len(f.pages)-1)]
+	f.calls++
+	return page, nil
+}
+
+func (f *fakeFetcher) State(_ context.Context, repo string, number int) (gh.State, error) {
+	pr := gh.PR{Repo: repo, Number: number}
+	if s, ok := f.states[pr.Key()]; ok {
+		return s, nil
+	}
+	return gh.StateOpen, nil
+}
+
+// step applies one message and asserts the model type came back intact.
+func step(t *testing.T, m Model, msg tea.Msg) (Model, tea.Cmd) {
+	t.Helper()
+	next, cmd := m.Update(msg)
+	got, ok := next.(Model)
+	if !ok {
+		t.Fatalf("Update returned %T, want ui.Model", next)
+	}
+	return got, cmd
+}
+
+// drain runs a command to completion, flattening batches into a message list.
+func drain(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	switch msg := cmd().(type) {
+	case nil:
+		return nil
+	case tea.BatchMsg:
+		var out []tea.Msg
+		for _, c := range msg {
+			out = append(out, drain(c)...)
+		}
+		return out
+	default:
+		return []tea.Msg{msg}
+	}
+}
+
+// testModel builds a sized, themed model ready to receive messages.
+func testModel(t *testing.T, f Fetcher) Model {
+	t.Helper()
+	m := New(Config{Fetcher: f, Interval: time.Minute, Timeout: time.Second})
+	m.applyTheme(true)
+	m, _ = step(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	return m
+}
+
+// samplePRs is a small, deliberately varied fixture.
+func samplePRs(now time.Time) []gh.PR {
+	return []gh.PR{
+		{
+			Number: 128, Title: "api: add rate limiter", Repo: "0-draft/api",
+			Author: "kanywst", Check: gh.CheckSuccess, Review: gh.ReviewApproved,
+			Additions: 142, Deletions: 9, ChangedFiles: 5, Comments: 3,
+			HeadRef: "feat/rate-limiter", BaseRef: "main",
+			URL: "https://github.com/0-draft/api/pull/128", UpdatedAt: now.Add(-2 * time.Hour),
+		},
+		{
+			Number: 127, Title: "fix: nil deref on empty body", Repo: "0-draft/api",
+			Author: "alice", Check: gh.CheckPending, Review: gh.ReviewRequired,
+			Reviewers: []string{"kanywst"}, Additions: 8, Deletions: 2,
+			URL: "https://github.com/0-draft/api/pull/127", UpdatedAt: now.Add(-5 * time.Hour),
+		},
+		{
+			Number: 12, Title: "docs: update README", Repo: "kanywst/prpr",
+			Author: "kanywst", Check: gh.CheckFailure, IsDraft: true,
+			Additions: 31, URL: "https://github.com/kanywst/prpr/pull/12",
+			UpdatedAt: now.Add(-7 * 24 * time.Hour),
+		},
+	}
+}
+
+func TestInitDiscoversOwners(t *testing.T) {
+	f := &fakeFetcher{me: "kanywst", orgs: []string{"0-draft"}, pages: [][]gh.PR{nil}}
+	m := testModel(t, f)
+
+	var owners *ownersMsg
+	for _, msg := range drain(m.Init()) {
+		if o, ok := msg.(ownersMsg); ok {
+			owners = &o
+		}
+	}
+	if owners == nil {
+		t.Fatal("Init did not produce an ownersMsg")
+	}
+	// The viewer's own account comes first, then every org they belong to.
+	if got, want := owners.owners, []string{"kanywst", "0-draft"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("owners = %v, want %v", got, want)
+	}
+}
+
+func TestPinnedOwnersSkipDiscovery(t *testing.T) {
+	f := &fakeFetcher{me: "kanywst", orgs: []string{"0-draft"}, pages: [][]gh.PR{nil}}
+	m := New(Config{Fetcher: f, Owners: []string{"someone-else"}, Interval: time.Minute, Timeout: time.Second})
+
+	for _, msg := range drain(m.Init()) {
+		if o, ok := msg.(ownersMsg); ok {
+			if len(o.owners) != 1 || o.owners[0] != "someone-else" {
+				t.Errorf("owners = %v, want [someone-else]", o.owners)
+			}
+			// The login is still resolved, so the identity tabs keep working.
+			if o.me != "kanywst" {
+				t.Errorf("me = %q, want kanywst", o.me)
+			}
+			return
+		}
+	}
+	t.Fatal("Init did not produce an ownersMsg")
+}
+
+func TestTabsPartitionByViewer(t *testing.T) {
+	now := time.Now()
+	f := &fakeFetcher{me: "kanywst", pages: [][]gh.PR{samplePRs(now)}}
+	m := testModel(t, f)
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+	m, _ = step(t, m, prsMsg{prs: samplePRs(now), at: now})
+
+	counts := m.counts()
+	for _, tt := range []struct {
+		tab  tabID
+		want int
+	}{
+		{tabAll, 3},
+		{tabMine, 2},   // #128 and #12 are authored by kanywst
+		{tabReview, 1}, // #127 requests a review from kanywst
+		{tabDraft, 1},  // #12 is a draft
+	} {
+		if got := counts[tt.tab]; got != tt.want {
+			t.Errorf("counts[%v] = %d, want %d", tt.tab, got, tt.want)
+		}
+	}
+
+	m.tab = tabReview
+	m.recompute()
+	if len(m.visible) != 1 || m.visible[0].Number != 127 {
+		t.Errorf("review tab = %v, want just #127", m.visible)
+	}
+}
+
+func TestFilterNarrowsAndKeepsSelection(t *testing.T) {
+	now := time.Now()
+	m := testModel(t, &fakeFetcher{me: "kanywst", pages: [][]gh.PR{samplePRs(now)}})
+	m, _ = step(t, m, ownersMsg{me: "kanywst"})
+	m, _ = step(t, m, prsMsg{prs: samplePRs(now), at: now})
+
+	m.cursor = 1 // #127
+	m.filter.SetValue("api")
+	m.recompute()
+
+	if len(m.visible) != 2 {
+		t.Fatalf("filtered to %d PRs, want 2", len(m.visible))
+	}
+	// The cursor rides along with the pull request it was on.
+	if pr, _ := m.selected(); pr.Number != 127 {
+		t.Errorf("selection = #%d, want #127", pr.Number)
+	}
+
+	m.filter.SetValue("zzz")
+	m.recompute()
+	if len(m.visible) != 0 {
+		t.Errorf("visible = %d, want 0", len(m.visible))
+	}
+	if _, ok := m.selected(); ok {
+		t.Error("selected() returned a PR from an empty list")
+	}
+}
+
+func TestMergeDetectionProducesFarewell(t *testing.T) {
+	now := time.Now()
+	all := samplePRs(now)
+	f := &fakeFetcher{
+		me:     "kanywst",
+		states: map[string]gh.State{"0-draft/api#127": gh.StateMerged},
+	}
+	m := testModel(t, f)
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst"}})
+
+	// First refresh: no farewells, because there is no previous list to diff.
+	m, cmd := step(t, m, prsMsg{prs: all, at: now})
+	if msgs := drain(cmd); len(msgs) != 0 {
+		t.Fatalf("first refresh emitted %v, want nothing", msgs)
+	}
+
+	// Second refresh with #127 gone: prpr asks GitHub how it ended.
+	remaining := []gh.PR{all[0], all[2]}
+	m, cmd = step(t, m, prsMsg{prs: remaining, at: now.Add(time.Minute)})
+
+	msgs := drain(cmd)
+	if len(msgs) != 1 {
+		t.Fatalf("second refresh emitted %d messages, want 1", len(msgs))
+	}
+	gone, ok := msgs[0].(goneMsg)
+	if !ok {
+		t.Fatalf("got %T, want goneMsg", msgs[0])
+	}
+	if gone.pr.Number != 127 || gone.state != gh.StateMerged {
+		t.Fatalf("goneMsg = #%d %s, want #127 MERGED", gone.pr.Number, gone.state)
+	}
+
+	m, _ = step(t, m, gone)
+	if len(m.farewells) != 1 {
+		t.Fatalf("farewells = %d, want 1", len(m.farewells))
+	}
+	if m.farewells[0].state != gh.StateMerged {
+		t.Errorf("farewell state = %s, want MERGED", m.farewells[0].state)
+	}
+}
+
+func TestFarewellsExpireAndAreCapped(t *testing.T) {
+	now := time.Now()
+	m := testModel(t, &fakeFetcher{})
+	m.now = now
+
+	for i := range maxFarewells + 3 {
+		m, _ = step(t, m, goneMsg{pr: gh.PR{Repo: "o/r", Number: i}, state: gh.StateMerged})
+	}
+	if len(m.farewells) != maxFarewells {
+		t.Fatalf("farewells = %d, want capped at %d", len(m.farewells), maxFarewells)
+	}
+
+	m, _ = step(t, m, tickMsg(now.Add(farewellLife+time.Second)))
+	if len(m.farewells) != 0 {
+		t.Errorf("farewells = %d after expiry, want 0", len(m.farewells))
+	}
+}
+
+func TestRefreshPausesWhileUnfocused(t *testing.T) {
+	now := time.Now()
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m.owners = []string{"kanywst"}
+	m.loading = false
+	m.lastFetch = now.Add(-2 * time.Minute) // well past the interval
+	m.now = now
+
+	if !m.refreshDue() {
+		t.Fatal("refreshDue() = false, want true when the interval has elapsed")
+	}
+
+	m, _ = step(t, m, tea.BlurMsg{})
+	if m.refreshDue() {
+		t.Error("refreshDue() = true while blurred; polling should pause")
+	}
+
+	m, _ = step(t, m, tea.FocusMsg{})
+	if !m.refreshDue() {
+		t.Error("refreshDue() = false after refocus, want true")
+	}
+}
+
+func TestErrorDefersRetryByOneInterval(t *testing.T) {
+	m := testModel(t, &fakeFetcher{})
+	m.owners = []string{"kanywst"}
+
+	m, _ = step(t, m, errMsg{errors.New("boom")})
+	if m.loading {
+		t.Error("loading stayed true after an error")
+	}
+	if m.lastErr == nil {
+		t.Error("lastErr was not recorded")
+	}
+	// Without this, a failing endpoint would be retried every tick.
+	m.now = time.Now()
+	if m.refreshDue() {
+		t.Error("refreshDue() = true immediately after an error")
+	}
+}
+
+func TestCursorStaysInsideTheList(t *testing.T) {
+	now := time.Now()
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m, _ = step(t, m, ownersMsg{me: "kanywst"})
+	m, _ = step(t, m, prsMsg{prs: samplePRs(now), at: now})
+
+	for range 10 {
+		m, _ = step(t, m, tea.KeyPressMsg{Code: 'j', Text: "j"})
+	}
+	if m.cursor != len(m.visible)-1 {
+		t.Errorf("cursor = %d after over-scrolling down, want %d", m.cursor, len(m.visible)-1)
+	}
+
+	for range 10 {
+		m, _ = step(t, m, tea.KeyPressMsg{Code: 'k', Text: "k"})
+	}
+	if m.cursor != 0 {
+		t.Errorf("cursor = %d after over-scrolling up, want 0", m.cursor)
+	}
+}
+
+func TestScrollingKeepsCursorVisible(t *testing.T) {
+	now := time.Now()
+	many := make([]gh.PR, 50)
+	for i := range many {
+		many[i] = gh.PR{
+			Number: i, Title: "pr", Repo: "o/r", Author: "kanywst",
+			UpdatedAt: now.Add(-time.Duration(i) * time.Minute),
+		}
+	}
+
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m, _ = step(t, m, ownersMsg{me: "kanywst"})
+	m, _ = step(t, m, prsMsg{prs: many, at: now})
+
+	rows := m.metrics().rows
+	m.cursor = len(many) - 1
+	m.clampCursor()
+
+	if m.cursor < m.offset || m.cursor >= m.offset+rows {
+		t.Errorf("cursor %d outside the visible window [%d, %d)", m.cursor, m.offset, m.offset+rows)
+	}
+	if want := len(many) - rows; m.offset != want {
+		t.Errorf("offset = %d, want %d", m.offset, want)
+	}
+}
+
+func TestFilterModeRoundTrip(t *testing.T) {
+	now := time.Now()
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m, _ = step(t, m, ownersMsg{me: "kanywst"})
+	m, _ = step(t, m, prsMsg{prs: samplePRs(now), at: now})
+
+	m, _ = step(t, m, tea.KeyPressMsg{Code: '/', Text: "/"})
+	if m.mode != modeFilter {
+		t.Fatal("pressing / did not enter filter mode")
+	}
+	// While filtering, the real terminal cursor is placed in the input.
+	if m.cursor2D() == nil {
+		t.Error("cursor2D() = nil in filter mode, want a placed cursor")
+	}
+
+	m.filter.SetValue("readme")
+	m.recompute()
+	if len(m.visible) != 1 {
+		t.Fatalf("filtered to %d, want 1", len(m.visible))
+	}
+
+	m, _ = step(t, m, tea.KeyPressMsg{Code: tea.KeyEscape})
+	if m.mode != modeList {
+		t.Error("escape did not leave filter mode")
+	}
+	if m.filter.Value() != "" {
+		t.Errorf("filter = %q after escape, want cleared", m.filter.Value())
+	}
+	if len(m.visible) != 3 {
+		t.Errorf("visible = %d after clearing the filter, want 3", len(m.visible))
+	}
+	if m.cursor2D() != nil {
+		t.Error("cursor2D() returned a cursor outside filter mode")
+	}
+}
