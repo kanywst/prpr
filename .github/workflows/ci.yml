@@ -29,11 +29,15 @@ jobs:
           go-version-file: go.mod
           check-latest: true
 
+      # bash on every runner: PowerShell splits "-coverprofile=coverage.out"
+      # at the "=", which turns ".out" into a bogus package argument.
       - name: go test
+        shell: bash
         run: go test -race -shuffle=on -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: coverage summary
         if: matrix.os == 'ubuntu-latest'
+        shell: bash
         run: go tool cover -func=coverage.out | tail -1 >> "$GITHUB_STEP_SUMMARY"
 
   build:
