@@ -38,6 +38,10 @@ vet: ## Run go vet
 lint: ## Run golangci-lint
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run
 
+.PHONY: demo
+demo: build ## Re-record docs/demo.gif with VHS
+	PATH="$(CURDIR)/bin:$$PATH" vhs docs/demo.tape
+
 .PHONY: tidy
 tidy: ## Tidy go.mod/go.sum
 	go mod tidy

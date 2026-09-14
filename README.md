@@ -8,30 +8,7 @@
 
 There is nothing to configure. prpr asks GitHub who you are and watches **your own account plus every org you belong to**, so it shows the right pull requests for whoever runs it.
 
-The interface is in Japanese.
-
-## Demo
-
-```text
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ 🌸 prpr  kanywst · 0-draft                                                             ⟳ 61s ┃
-┃ ──────────────────────────────────────────────────────────────────────────────────────────── ┃
-┃ ▸ すべて 3  │  自分の 2  │  レビュー待ち 1  │  下書き 1                                      ┃
-┃                                                                                              ┃
-┃ 🌟 🎉 0-draft/api#127 fix: nil deref on empty body マージされたよ〜 おめでとう!              ┃
-┃                                                                                              ┃
-┃ ▸ #128 🟢✅ api: add rate limiter                                                            ┃
-┃      👤 kanywst  ⏱ 2時間  📈 +142/-9  💬 3                                      0-draft/api  ┃
-┃                                                                                              ┃
-┃   #127 🟡👀 fix: nil deref on empty body                                                     ┃
-┃      👤 alice  ⏱ 5時間  📈 +8/-2  💬 0                                          0-draft/api  ┃
-┃                                                                                              ┃
-┃   #12 📝 docs: update README                                                                 ┃
-┃      👤 kanywst  ⏱ 1週間  📈 +31/-0  💬 0                                      kanywst/prpr  ┃
-┃                                                                                              ┃
-┃ ⏎ ブラウザで開く • r 更新 • tab 次のタブ • / 絞り込み • d 詳細 • ? ヘルプ • q バイバイ       ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-```
+![prpr walking through a list of pull requests, opening the detail pane, filtering, switching tabs, and showing a merge banner](docs/demo.gif)
 
 ## What it does
 
@@ -44,6 +21,7 @@ The interface is in Japanese.
 - **Stops when you are away.** Polling pauses while the terminal does not have focus.
 - **Mouse support.** Click to select, wheel to scroll.
 - **Light and dark.** The palette is derived from the terminal's reported background color.
+- **English or Japanese.** English by default; `--lang ja` switches the whole interface.
 - **Reuses `gh`.** No token to configure.
 
 ## Install
@@ -67,6 +45,8 @@ prpr
 | `--owner` | discovered | Owner to watch. Repeatable, and accepts a comma-separated list |
 | `--interval` | `1m` | Auto-refresh interval (minimum `5s`) |
 | `--timeout` | `20s` | Timeout for a single refresh |
+| `--lang` | `en` | Interface language: `en` or `ja` |
+| `--demo` | off | Run against a fixed fixture list instead of GitHub |
 | `--version` | | Print the version and exit |
 
 For example:
@@ -77,6 +57,9 @@ prpr --owner 0-draft
 
 # refresh every 30 seconds
 prpr --interval 30s
+
+# Japanese interface
+prpr --lang ja
 ```
 
 ### Keys
@@ -92,7 +75,8 @@ prpr --interval 30s
 | `d` | Toggle the detail pane |
 | `ctrl+u` / `ctrl+d` | Scroll the detail pane |
 | `r` | Refresh now |
-| `/` | Filter (`esc` clears it) |
+| `/` | Filter |
+| `esc` | Clear the filter |
 | `?` | Expand the help |
 | `ctrl+z` | Suspend |
 | `q` / `ctrl+c` | Quit |
@@ -111,6 +95,7 @@ prpr --interval 30s
 | --- | --- |
 | `internal/gh` | The domain type (`PR`) and the GitHub GraphQL adapter |
 | `internal/browser` | The one OS-dependent side effect |
+| `internal/demo` | The fixture list behind `--demo` |
 | `internal/ui` | The Bubble Tea MVU loop, with pure helpers kept apart from state |
 | `main.go` | Flag parsing and wiring |
 
@@ -124,6 +109,7 @@ Built on [Bubble Tea v2](https://github.com/charmbracelet/bubbletea), [Bubbles v
 make check   # fmt + vet + lint + test
 make test    # tests with the race detector
 make build   # ./bin/prpr
+make demo    # re-record docs/demo.gif with VHS
 make help    # list targets
 ```
 
