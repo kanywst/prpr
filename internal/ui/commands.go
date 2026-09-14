@@ -114,21 +114,23 @@ func (m Model) stateCmd(pr gh.PR) tea.Cmd {
 }
 
 // openCmd opens a pull request in the browser.
-func openCmd(url string) tea.Cmd {
+func (m Model) openCmd(url string) tea.Cmd {
+	opened := m.s.OpenedInBrowser
 	return func() tea.Msg {
 		if err := browser.Open(url); err != nil {
 			return errMsg{err}
 		}
-		return noticeMsg{"ブラウザで開いたよ"}
+		return noticeMsg{opened}
 	}
 }
 
 // copyCmd puts a pull request URL on the system clipboard.
-func copyCmd(url string) tea.Cmd {
+func (m Model) copyCmd(url string) tea.Cmd {
+	copied, failed := m.s.CopiedURL, m.s.ClipboardFailed
 	return func() tea.Msg {
 		if err := clipboard.WriteAll(url); err != nil {
-			return noticeMsg{"クリップボードが使えなかった"}
+			return noticeMsg{failed}
 		}
-		return noticeMsg{"URL コピーしたよ"}
+		return noticeMsg{copied}
 	}
 }

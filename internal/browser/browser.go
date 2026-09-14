@@ -35,7 +35,7 @@ func OpenContext(ctx context.Context, url string) error {
 
 	cmd := exec.CommandContext(ctx, name, args...)
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("%s の起動に失敗: %w", name, err)
+		return fmt.Errorf("could not launch %s: %w", name, err)
 	}
 	// The browser outlives prpr; reap the launcher so it does not linger as a
 	// zombie for the rest of the session.

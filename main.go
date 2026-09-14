@@ -14,6 +14,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/kanywst/prpr/internal/demo"
 	"github.com/kanywst/prpr/internal/gh"
 	"github.com/kanywst/prpr/internal/ui"
 )
@@ -49,15 +50,18 @@ func (o *ownerList) Set(v string) error {
 func run(args []string) error {
 	fs := flag.NewFlagSet("prpr", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "prpr — GitHub の open PR を眺める TUI\n\n使い方: prpr [オプション]\n\n")
+		fmt.Fprint(fs.Output(),
+			"prpr — a TUI for the open GitHub pull requests you can see\n\nusage: prpr [options]\n\n")
 		fs.PrintDefaults()
 	}
 
 	var owners ownerList
-	fs.Var(&owners, "owner", "監視する owner (繰り返し・カンマ区切り可)。既定はログインユーザーと所属 org")
-	interval := fs.Duration("interval", time.Minute, "自動更新の間隔")
-	timeout := fs.Duration("timeout", 20*time.Second, "1 回の更新のタイムアウト")
-	showVersion := fs.Bool("version", false, "バージョンを表示して終了")
+	fs.Var(&owners, "owner", "owner to watch; repeatable and comma-separated.\ndefaults to the logged-in user and every org they belong to")
+	interval := fs.Duration("interval", time.Minute, "auto-refresh interval")
+	timeout := fs.Duration("timeout", 20*time.Second, "timeout for a single refresh")
+	lang := fs.String("lang", string(ui.LangEN), "interface language: en or ja")
+	demoMode := fs.Bool("demo", false, "run against a canned pull request list, for screenshots and recordings")
+	showVersion := fs.Bool("version", false, "print the version and exit")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -67,28 +71,41 @@ func run(args []string) error {
 		return nil
 	}
 	if *interval < 5*time.Second {
-		return fmt.Errorf("--interval は 5s 以上にしてね (指定: %s)", *interval)
+		return fmt.Errorf("--interval must be at least 5s (got %s)", *interval)
 	}
 	if *timeout <= 0 {
-		return errors.New("--timeout は正の値にしてね")
+		return errors.New("--timeout must be positive")
+	}
+	parsed, ok := ui.ParseLang(*lang)
+	if !ok {
+		return fmt.Errorf("--lang must be en or ja (got %q)", *lang)
 	}
 
-	client, err := gh.New()
+	fetcher, err := newFetcher(*demoMode)
 	if err != nil {
 		return err
 	}
 
 	model := ui.New(ui.Config{
-		Fetcher:  client,
+		Fetcher:  fetcher,
 		Owners:   owners,
 		Interval: *interval,
 		Timeout:  *timeout,
+		Lang:     parsed,
 	})
 
 	if _, err := tea.NewProgram(model).Run(); err != nil {
-		return fmt.Errorf("TUI が落ちた: %w", err)
+		return fmt.Errorf("the TUI stopped: %w", err)
 	}
 	return nil
+}
+
+// newFetcher picks the live GitHub client, or the fixture one behind --demo.
+func newFetcher(demoMode bool) (ui.Fetcher, error) {
+	if demoMode {
+		return demo.New(), nil
+	}
+	return gh.New()
 }
 
 // buildVersion reports the release version, falling back to whatever the Go

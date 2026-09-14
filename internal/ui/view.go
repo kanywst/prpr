@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,6 +12,11 @@ import (
 
 	"github.com/kanywst/prpr/internal/gh"
 )
+
+// ruleGlyph draws the horizontal dividers. It is the heavy box-drawing line
+// rather than the light one: the light glyph is missing from enough terminal
+// fonts that the divider silently rendered as a blank row.
+const ruleGlyph = "━"
 
 // filterPrefix labels the filter input line.
 const filterPrefix = "🔍 "
@@ -40,7 +46,7 @@ func (m Model) windowTitle() string {
 	if !m.ready {
 		return "prpr"
 	}
-	return fmt.Sprintf("prpr · オープン %d 件", len(m.prs))
+	return fmt.Sprintf(m.s.OpenCount, len(m.prs))
 }
 
 // cursor2D places the real terminal cursor inside the filter input, and hides
@@ -88,7 +94,7 @@ func (m Model) render() string {
 
 // tooSmallView is what a terminal too small for the layout gets.
 func (m Model) tooSmallView() string {
-	msg := m.theme.Empty.Render("🌸 ちいさすぎるかも…\nもうすこし広げてね")
+	msg := m.theme.Empty.Render(m.s.TooSmall)
 	return lipgloss.Place(max(m.width, 1), max(m.height, 1), lipgloss.Center, lipgloss.Center, msg)
 }
 
@@ -113,11 +119,11 @@ func (m Model) statusView() string {
 	case m.flash != "":
 		return m.theme.Status.Render("✨ " + m.flash)
 	case m.loading:
-		return m.spinner.View() + m.theme.Status.Render(" あつめてる…")
+		return m.spinner.View() + m.theme.Status.Render(m.s.Collecting)
 	case m.lastErr != nil:
-		return m.theme.Error.Render("😿 しっぱい")
+		return m.theme.Error.Render(m.s.Failed)
 	case !m.focused:
-		return m.theme.StatusWarm.Render("⏸ 休憩中")
+		return m.theme.StatusWarm.Render(m.s.Paused)
 	case m.lastFetch.IsZero():
 		return m.theme.Status.Render("⟳ …")
 	default:
@@ -131,7 +137,7 @@ func (m Model) statusView() string {
 
 // ruleView is the horizontal divider under the header.
 func (m Model) ruleView(mt metrics) string {
-	return m.theme.Rule.Render(strings.Repeat("─", mt.innerW))
+	return m.theme.Rule.Render(strings.Repeat(ruleGlyph, mt.innerW))
 }
 
 // tabsView is the tab bar, with a live count per tab and the active filter.
@@ -140,7 +146,7 @@ func (m Model) tabsView(mt metrics) string {
 
 	parts := make([]string, 0, len(allTabs))
 	for _, t := range allTabs {
-		label, count := t.String(), fmt.Sprintf(" %d", counts[t])
+		label, count := t.label(m.s), fmt.Sprintf(" %d", counts[t])
 		if t == m.tab {
 			parts = append(parts, m.theme.TabActive.Render("▸ "+label)+m.theme.TabSelected.Render(count))
 		} else {
@@ -170,7 +176,7 @@ func (m Model) farewellView(mt metrics) string {
 
 	lines := make([]string, 0, len(m.farewells))
 	for _, f := range m.farewells {
-		icon, word := stateWord(f.state)
+		icon, word := stateWord(f.state, m.s)
 		style := m.theme.Party
 		if m.now.Sub(f.born) > farewellFade {
 			style = m.theme.PartyFade
@@ -207,7 +213,7 @@ func (m Model) bodyView(mt metrics) string {
 // detailPane renders the scrollable detail viewport.
 func (m Model) detailPane(mt metrics, width int) string {
 	if _, ok := m.selected(); !ok {
-		return m.centered(width, mt.listH, m.theme.Empty.Render("えらばれてないよ"))
+		return m.centered(width, mt.listH, m.theme.Empty.Render(m.s.NothingSelected))
 	}
 	return m.detail.View()
 }
@@ -216,9 +222,9 @@ func (m Model) detailPane(mt metrics, width int) string {
 func (m Model) listView(mt metrics, width int) string {
 	switch {
 	case !m.ready && m.lastErr != nil:
-		return m.centered(width, mt.listH, m.theme.Error.Render("😿 "+m.lastErr.Error()+"\n\nr でもう一回"))
+		return m.centered(width, mt.listH, m.theme.Error.Render(fmt.Sprintf(m.s.ErrorHint, m.lastErr)))
 	case !m.ready:
-		return m.centered(width, mt.listH, m.theme.Empty.Render("PR あつめてるよ…"))
+		return m.centered(width, mt.listH, m.theme.Empty.Render(m.s.Loading))
 	case len(m.visible) == 0:
 		return m.centered(width, mt.listH, m.theme.Empty.Render(m.emptyMessage()))
 	}
@@ -253,17 +259,17 @@ func (m Model) listView(mt metrics, width int) string {
 // emptyMessage is what an empty tab says, which depends on why it is empty.
 func (m Model) emptyMessage() string {
 	if m.filter.Value() != "" {
-		return "🔍 みつからなかった\n\nesc で絞り込み解除"
+		return m.s.EmptyFilter
 	}
 	switch m.tab {
 	case tabMine:
-		return "✨ 自分の PR はないよ〜 ✨"
+		return m.s.EmptyMine
 	case tabReview:
-		return "✨ レビュー待ちゼロ! えらい ✨"
+		return m.s.EmptyReview
 	case tabDraft:
-		return "✨ 下書きはないよ ✨"
+		return m.s.EmptyDraft
 	default:
-		return "✨ PR ないよ〜 おつかれさま ✨"
+		return m.s.EmptyAll
 	}
 }
 
@@ -318,7 +324,7 @@ func (m Model) rowView(pr gh.PR, selected bool, width int, compact bool) []strin
 	}
 	meta := strings.Join([]string{
 		"👤 " + author,
-		"⏱ " + humanAge(m.now.Sub(pr.UpdatedAt)),
+		"⏱ " + humanAge(m.now.Sub(pr.UpdatedAt), m.s),
 		"📈 " + m.theme.Additions.Render(fmt.Sprintf("+%d", pr.Additions)) +
 			"/" + m.theme.Deletions.Render(fmt.Sprintf("-%d", pr.Deletions)),
 		"💬 " + fmt.Sprintf("%d", pr.Comments),
@@ -348,69 +354,55 @@ func (m Model) detailContent(pr gh.PR) string {
 		fmt.Fprintf(&b, "%s %s\n", t.DetailKey.Render(key), t.Detail.Render(value))
 	}
 
-	state := checkIcon(pr.Check, pr.IsDraft) + " " + checkWord(pr.Check, pr.IsDraft)
+	state := checkIcon(pr.Check, pr.IsDraft) + " " + checkWord(pr.Check, pr.IsDraft, m.s)
 	if r := reviewIcon(pr.Review); r != "" {
-		state += "   " + r + " " + reviewWord(pr.Review)
+		state += "   " + r + " " + reviewWord(pr.Review, m.s)
 	}
-	row("状態", state)
-	row("作者", pr.Author)
-	row("更新", humanAge(m.now.Sub(pr.UpdatedAt))+"前")
-	row("作成", humanAge(m.now.Sub(pr.CreatedAt))+"前")
-	row("ブランチ", pr.HeadRef+" → "+pr.BaseRef)
-	row("差分", fmt.Sprintf("+%d / -%d  (%d ファイル)", pr.Additions, pr.Deletions, pr.ChangedFiles))
-	row("コメント", fmt.Sprintf("%d", pr.Comments))
+	ago := func(at time.Time) string {
+		return fmt.Sprintf(m.s.AgeAgo, humanAge(m.now.Sub(at), m.s))
+	}
+	row(m.s.DetailState, state)
+	row(m.s.DetailAuthor, pr.Author)
+	row(m.s.DetailUpdated, ago(pr.UpdatedAt))
+	row(m.s.DetailCreated, ago(pr.CreatedAt))
+	row(m.s.DetailBranch, pr.HeadRef+" → "+pr.BaseRef)
+	row(m.s.DetailDiff, fmt.Sprintf("+%d / -%d  %s",
+		pr.Additions, pr.Deletions, fmt.Sprintf(m.s.FilesSuffix, pr.ChangedFiles)))
+	row(m.s.DetailComments, strconv.Itoa(pr.Comments))
 	if len(pr.Labels) > 0 {
-		row("ラベル", strings.Join(pr.Labels, ", "))
+		row(m.s.DetailLabels, strings.Join(pr.Labels, ", "))
 	}
 	if len(pr.Reviewers) > 0 {
-		row("レビュー依頼", strings.Join(pr.Reviewers, ", "))
+		row(m.s.DetailReviewers, strings.Join(pr.Reviewers, ", "))
 	}
-	row("URL", pr.URL)
+	row(m.s.DetailURL, pr.URL)
 
 	if body := strings.TrimSpace(pr.Body); body != "" {
-		b.WriteString("\n" + t.Rule.Render(strings.Repeat("─", width)) + "\n\n")
+		b.WriteString("\n" + t.Rule.Render(strings.Repeat(ruleGlyph, width)) + "\n\n")
 		b.WriteString(t.DetailBody.Render(lipgloss.Wrap(body, width, "")))
 	}
 	return b.String()
 }
 
-// checkWord spells out a rolled-up CI state.
-func checkWord(c gh.Check, isDraft bool) string {
-	if isDraft {
-		return "下書き"
-	}
-	switch c {
-	case gh.CheckSuccess:
-		return "CI 通過"
-	case gh.CheckPending, gh.CheckExpected:
-		return "CI 実行中"
-	case gh.CheckFailure, gh.CheckError:
-		return "CI 失敗"
-	default:
-		return "CI なし"
-	}
-}
-
-// reviewWord spells out a review decision.
-func reviewWord(r gh.Review) string {
-	switch r {
-	case gh.ReviewApproved:
-		return "承認済み"
-	case gh.ReviewChanges:
-		return "変更依頼"
-	case gh.ReviewRequired:
-		return "レビュー待ち"
-	default:
-		return ""
-	}
-}
-
 // footerView is the filter input while filtering, and the help otherwise.
+//
+// Both are clamped here rather than trusted to clamp themselves: the help
+// bubble's own truncation does not always respect the width it was given, and
+// one over-wide line widens the whole frame past the terminal.
 func (m Model) footerView() string {
+	var raw string
 	if m.mode == modeFilter {
-		return m.theme.FilterIcon.Render(filterPrefix) + m.filter.View()
+		raw = m.theme.FilterIcon.Render(filterPrefix) + m.filter.View()
+	} else {
+		raw = m.help.View(m.keys)
 	}
-	return m.help.View(m.keys)
+
+	width := m.innerWidth()
+	lines := strings.Split(raw, "\n")
+	for i, line := range lines {
+		lines[i] = truncate(line, width)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // centered places content in the middle of a width x height box.
