@@ -1,0 +1,12 @@
+{
+  "config": {
+    "default": true,
+    // Prose is written one sentence per line; hard-wrapping it hurts diffs.
+    "MD013": false,
+    "MD024": false,
+    "MD033": { "allowed_elements": ["picture", "source", "img"] },
+    "MD036": false,
+    "MD041": false,
+    "MD060": false
+  }
+}
