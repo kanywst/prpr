@@ -95,3 +95,40 @@ jobs:
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.13.2
+
+  # The release config is a pile of templates that nothing else exercises. Left
+  # to itself, a typo in it surfaces the next time a v* tag is pushed, halfway
+  # through a release that then needs a fresh tag to retry. Build it for real
+  # on every pull request instead.
+  release-config:
+    name: release config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # goreleaser reads tag history to derive a version.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: "~> v2"
+          args: check
+
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: "~> v2"
+          # Builds every target and renders the Homebrew cask, without pushing
+          # anything. The token only has to be non-empty for the template to
+          # resolve; nothing authenticates with it on this path.
+          args: release --snapshot --clean --skip=publish,announce
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: unused-in-snapshot-builds
+
+      - name: The cask rendered
+        run: test -s dist/homebrew/Casks/prpr.rb && cat dist/homebrew/Casks/prpr.rb

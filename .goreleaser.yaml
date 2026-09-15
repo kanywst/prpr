@@ -67,9 +67,12 @@ homebrew_casks:
     url:
       template: "https://github.com/kanywst/prpr/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
 
+    # Not goreleaser's own maintainer address, which is what its docs example
+    # uses and what gets copied around: these commits land in this account's
+    # tap and should not be attributed to a third party.
     commit_author:
       name: goreleaserbot
-      email: goreleaser@carlosbecker.com
+      email: noreply@github.com
 
     commit_msg_template: "Brew cask update for {{ .ProjectName }} version {{ .Tag }}"
 
