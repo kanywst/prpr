@@ -28,11 +28,26 @@ There is nothing to configure. prpr asks GitHub who you are and watches **your o
 
 prpr borrows the `gh` CLI's stored credentials, so `gh auth login` has to have been run.
 
+Homebrew:
+
+```bash
+brew install kanywst/tap/prpr
+```
+
+Scoop, on Windows:
+
+```bash
+scoop bucket add kanywst https://github.com/kanywst/scoop-bucket
+scoop install prpr
+```
+
+From source:
+
 ```bash
 go install github.com/kanywst/prpr@latest
 ```
 
-Prebuilt binaries are on the [releases page](https://github.com/kanywst/prpr/releases/latest).
+Prebuilt binaries for macOS, Linux and Windows are on the [releases page](https://github.com/kanywst/prpr/releases/latest).
 
 ## Usage
 

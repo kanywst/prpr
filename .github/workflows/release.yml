@@ -31,3 +31,6 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A PAT with write access to kanywst/homebrew-tap. GITHUB_TOKEN above
+          # is scoped to this repository and cannot push the cask.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

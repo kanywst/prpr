@@ -30,11 +30,26 @@ UI は既定で英語。`--lang ja` で日本語になる。
 
 `gh` CLI がログイン済みであることが前提 (`gh auth login`)。prpr はその認証情報をそのまま使う。
 
+Homebrew:
+
+```bash
+brew install kanywst/tap/prpr
+```
+
+Scoop (Windows):
+
+```bash
+scoop bucket add kanywst https://github.com/kanywst/scoop-bucket
+scoop install prpr
+```
+
+ソースから:
+
 ```bash
 go install github.com/kanywst/prpr@latest
 ```
 
-[Releases](https://github.com/kanywst/prpr/releases/latest) からビルド済みバイナリを落としてもいい。
+macOS / Linux / Windows のビルド済みバイナリは [Releases](https://github.com/kanywst/prpr/releases/latest) にある。
 
 ## 使い方
 
