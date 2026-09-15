@@ -26,24 +26,31 @@ jobs:
           check-latest: true
 
       # goreleaser publishes the GitHub release before it pushes the cask, so a
-      # missing tap token fails the run *after* the binaries are already out,
-      # and recovering needs a new tag. Stop here instead, where nothing has
-      # been published and the reason is legible.
-      - name: Require the tap token
+      # missing tap token would fail the run *after* the binaries are already
+      # out, and recovering from that needs a fresh tag. Drop the cask instead:
+      # the release still ships, Scoop is unaffected (the bucket updates itself
+      # from the published assets and needs no token here), and the warning
+      # says what is missing.
+      - name: Decide whether the cask can be published
+        id: tap
         env:
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
         run: |
           if [ -z "$HOMEBREW_TAP_GITHUB_TOKEN" ]; then
-            echo "::error::HOMEBREW_TAP_GITHUB_TOKEN is not set, so the Homebrew cask cannot be pushed. Set a PAT with write access to kanywst/homebrew-tap: gh secret set HOMEBREW_TAP_GITHUB_TOKEN --repo kanywst/prpr"
-            exit 1
+            echo "::warning::HOMEBREW_TAP_GITHUB_TOKEN is not set, so this release ships without a Homebrew cask. Set a PAT with write access to kanywst/homebrew-tap and cut another tag: gh secret set HOMEBREW_TAP_GITHUB_TOKEN --repo kanywst/prpr"
+            echo "args=release --clean --skip=homebrew" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=release --clean" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: "~> v2"
-          args: release --clean
+          args: ${{ steps.tap.outputs.args }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # A PAT with write access to kanywst/homebrew-tap. GITHUB_TOKEN above
-          # is scoped to this repository and cannot push the cask.
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          # is scoped to this repository and cannot push the cask. The fallback
+          # keeps the cask's token template renderable on the skipped path; it
+          # never authenticates anything, because the step is skipped.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN || 'unset-cask-is-skipped' }}
