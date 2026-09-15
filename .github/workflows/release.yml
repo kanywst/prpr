@@ -25,9 +25,25 @@ jobs:
           go-version-file: go.mod
           check-latest: true
 
+      # goreleaser publishes the GitHub release before it pushes the cask, so a
+      # missing tap token fails the run *after* the binaries are already out,
+      # and recovering needs a new tag. Stop here instead, where nothing has
+      # been published and the reason is legible.
+      - name: Require the tap token
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          if [ -z "$HOMEBREW_TAP_GITHUB_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_GITHUB_TOKEN is not set, so the Homebrew cask cannot be pushed. Set a PAT with write access to kanywst/homebrew-tap: gh secret set HOMEBREW_TAP_GITHUB_TOKEN --repo kanywst/prpr"
+            exit 1
+          fi
+
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A PAT with write access to kanywst/homebrew-tap. GITHUB_TOKEN above
+          # is scoped to this repository and cannot push the cask.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

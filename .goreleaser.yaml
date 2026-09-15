@@ -18,15 +18,74 @@ builds:
 
 archives:
   - formats: [tar.gz]
+    # Scoop's autoupdate manifest interpolates this exact shape, so the
+    # template and the entry in kanywst/scoop-bucket have to agree.
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    # Windows packaging tools expect a zip; handing Scoop a .tar.gz makes the
+    # download the hardest step of the install.
     format_overrides:
       - goos: windows
         formats: [zip]
     files:
       - README.md
+      - README.ja.md
       - LICENSE
 
 checksum:
-  name_template: checksums.txt
+  # Named after the project so Scoop's autoupdate can find it by version.
+  name_template: "{{ .ProjectName }}-{{ .Version }}-checksums.txt"
+
+# `brews` (Homebrew formulas) is deprecated in goreleaser v2; casks are what it
+# generates for pre-compiled binaries now, and Casks/ is where the rest of
+# kanywst/homebrew-tap keeps this kind of tool.
+homebrew_casks:
+  - name: prpr
+
+    binaries:
+      - prpr
+
+    # Casks are downloaded with curl, so macOS tags the payload with
+    # com.apple.quarantine and Gatekeeper refuses to run it. Stripping the
+    # attribute in postflight is the path goreleaser documents.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/prpr"]
+          end
+
+    # HOMEBREW_TAP_GITHUB_TOKEN is a PAT with write access to the tap; the
+    # release workflow passes it through.
+    repository:
+      owner: kanywst
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+
+    directory: Casks
+
+    url:
+      template: "https://github.com/kanywst/prpr/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+
+    # Not goreleaser's own maintainer address, which is what its docs example
+    # uses and what gets copied around: these commits land in this account's
+    # tap and should not be attributed to a third party.
+    commit_author:
+      name: goreleaserbot
+      email: noreply@github.com
+
+    commit_msg_template: "Brew cask update for {{ .ProjectName }} version {{ .Tag }}"
+
+    homepage: "https://github.com/kanywst/prpr"
+    # Homebrew's audit rules reject a leading article, a trailing period, and a
+    # description that repeats the cask name, and cap it at 80 characters.
+    description: "Terminal dashboard for the open GitHub pull requests you can see"
+
+    # Keeps prereleases out of the tap; tagged releases still publish.
+    skip_upload: auto
+
+release:
+  prerelease: auto
 
 changelog:
   sort: asc
