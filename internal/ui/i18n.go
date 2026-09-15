@@ -12,8 +12,13 @@ const (
 	LangJA Lang = "ja"
 )
 
-// ParseLang resolves a --lang value, falling back to English for anything it
-// does not recognize so a typo degrades to a usable interface.
+// ParseLang resolves a --lang value. The bool reports whether the value was
+// recognized; the Lang is English either way, so a caller that chooses to
+// carry on has something usable.
+//
+// prpr itself does not carry on: main treats an unrecognized value as a fatal
+// flag error, because silently running in a language the user did not ask for
+// is worse than refusing to start.
 func ParseLang(s string) (Lang, bool) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "", "en", "en-us", "en_us", "english":

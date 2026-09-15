@@ -19,7 +19,7 @@ func TestParseLang(t *testing.T) {
 		{"JP", LangJA, true},
 		{" ja ", LangJA, true},
 		{"日本語", LangJA, true},
-		{"fr", LangEN, false}, // unknown falls back rather than failing closed
+		{"fr", LangEN, false}, // unrecognized: reported, but still English
 	}
 	for _, tt := range tests {
 		got, ok := ParseLang(tt.in)
