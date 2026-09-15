@@ -57,22 +57,45 @@ func TestRenderShowsTheEssentials(t *testing.T) {
 	m := loadedModel(t, 120, 40, samplePRs(time.Now()))
 	out := ansi.Strip(m.render())
 
-	for _, want := range []string{"prpr", "#128", "api: add rate limiter", "すべて", "kanywst"} {
+	for _, want := range []string{"prpr", "#128", "api: add rate limiter", "all", "kanywst"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("render missing %q:\n%s", want, out)
 		}
 	}
 }
 
+func TestRenderJapaneseWhenAsked(t *testing.T) {
+	now := time.Now()
+	m := New(Config{
+		Fetcher: &fakeFetcher{me: "kanywst"}, Interval: time.Minute,
+		Timeout: time.Second, Lang: LangJA,
+	})
+	m.applyTheme(true)
+	m.now = now
+	m, _ = step(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = step(t, m, ownersMsg{me: "kanywst"})
+	m, _ = step(t, m, prsMsg{prs: samplePRs(now), at: now})
+
+	out := ansi.Strip(m.render())
+	for _, want := range []string{"すべて", "レビュー待ち", "下書き"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("Japanese render missing %q:\n%s", want, out)
+		}
+	}
+	// The layout contract has to hold in both languages; Japanese labels are
+	// twice as wide per rune.
+	assertFits(t, m.render(), 120, 40)
+}
+
 func TestRenderEmptyStateIsPerTab(t *testing.T) {
 	m := loadedModel(t, 100, 30, nil)
-	if out := ansi.Strip(m.render()); !strings.Contains(out, "おつかれさま") {
+	if out := ansi.Strip(m.render()); !strings.Contains(out, "no open pull requests") {
 		t.Errorf("empty list did not show the all-clear message:\n%s", out)
 	}
 
 	m.tab = tabReview
 	m.recompute()
-	if out := ansi.Strip(m.render()); !strings.Contains(out, "レビュー待ちゼロ") {
+	if out := ansi.Strip(m.render()); !strings.Contains(out, "review queue is empty") {
 		t.Errorf("empty review tab did not show its own message:\n%s", out)
 	}
 }
@@ -82,7 +105,7 @@ func TestRenderFarewellBand(t *testing.T) {
 	m, _ = step(t, m, goneMsg{pr: m.prs[0], state: gh.StateMerged})
 
 	out := ansi.Strip(m.render())
-	if !strings.Contains(out, "🎉") || !strings.Contains(out, "おめでとう") {
+	if !strings.Contains(out, "🎉") || !strings.Contains(out, "merged!") {
 		t.Errorf("farewell band not rendered:\n%s", out)
 	}
 	assertFits(t, m.render(), 120, 40)
@@ -96,7 +119,7 @@ func TestRenderDetailPane(t *testing.T) {
 		t.Fatal("a 140-column terminal should show the detail pane beside the list")
 	}
 	out := ansi.Strip(m.render())
-	for _, want := range []string{"feat/rate-limiter", "ブランチ", "差分"} {
+	for _, want := range []string{"feat/rate-limiter", "branch", "diff"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("detail pane missing %q:\n%s", want, out)
 		}
@@ -115,7 +138,7 @@ func TestRenderDetailPane(t *testing.T) {
 func TestRenderTinyTerminal(t *testing.T) {
 	m := loadedModel(t, 30, 8, samplePRs(time.Now()))
 	out := ansi.Strip(m.render())
-	if !strings.Contains(out, "ちいさすぎる") {
+	if !strings.Contains(out, "too small") {
 		t.Errorf("tiny terminal did not get the size hint:\n%s", out)
 	}
 	assertFits(t, m.render(), 30, 8)

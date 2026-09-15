@@ -254,12 +254,12 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Open):
 		if pr, ok := m.selected(); ok {
-			return m, openCmd(pr.URL)
+			return m, m.openCmd(pr.URL)
 		}
 
 	case key.Matches(msg, m.keys.Copy):
 		if pr, ok := m.selected(); ok {
-			return m, copyCmd(pr.URL)
+			return m, m.copyCmd(pr.URL)
 		}
 
 	case key.Matches(msg, m.keys.Detail):
@@ -282,6 +282,16 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeFilter
 		m.applySize()
 		return m, m.filter.Focus()
+
+	case key.Matches(msg, m.keys.ClearFilter):
+		// With no filter to clear this is a deliberate no-op rather than a
+		// quit: esc is the key people press to back out of something, and
+		// having it exit the program is a footgun.
+		if m.filter.Value() != "" {
+			m.filter.SetValue("")
+			m.recompute()
+			m.applySize()
+		}
 
 	case key.Matches(msg, m.keys.Help):
 		m.help.ShowAll = !m.help.ShowAll

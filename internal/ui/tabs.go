@@ -16,19 +16,19 @@ const (
 // allTabs is the tab bar's order.
 var allTabs = []tabID{tabAll, tabMine, tabReview, tabDraft}
 
-// String returns the tab's label.
-func (t tabID) String() string {
+// label returns the tab's display name in the active language.
+func (t tabID) label(s Strings) string {
 	switch t {
 	case tabAll:
-		return "すべて"
+		return s.TabAll
 	case tabMine:
-		return "自分の"
+		return s.TabMine
 	case tabReview:
-		return "レビュー待ち"
+		return s.TabReview
 	case tabDraft:
-		return "下書き"
+		return s.TabDraft
 	default:
-		return "すべて"
+		return s.TabAll
 	}
 }
 

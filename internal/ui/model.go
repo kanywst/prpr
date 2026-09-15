@@ -40,6 +40,8 @@ type Config struct {
 	Interval time.Duration
 	// Timeout bounds a single refresh.
 	Timeout time.Duration
+	// Lang selects the interface language. The zero value is English.
+	Lang Lang
 }
 
 // Tunables that are deliberately not exposed as flags: they are timings the
@@ -102,6 +104,7 @@ type Model struct {
 
 	width, height int
 	theme         Theme
+	s             Strings
 
 	spinner    spinner.Model
 	filter     textinput.Model
@@ -120,6 +123,8 @@ type Model struct {
 // New builds a Model from cfg. It does no I/O; the first fetch is kicked off
 // by Init.
 func New(cfg Config) Model {
+	s := Catalog(cfg.Lang)
+
 	sp := spinner.New(spinner.WithSpinner(spinner.Spinner{
 		Frames: []string{"🌸", "🌺", "🌷", "🌼", "🌻", "🌼", "🌷", "🌺"},
 		FPS:    time.Second / 6,
@@ -127,7 +132,7 @@ func New(cfg Config) Model {
 
 	fi := textinput.New()
 	fi.Prompt = ""
-	fi.Placeholder = "タイトル / リポ / 作者 / #番号"
+	fi.Placeholder = s.FilterPlaceholder
 	fi.CharLimit = 80
 	// prpr draws the real terminal cursor at the input's position, so the
 	// input must not also draw a fake one.
@@ -147,12 +152,13 @@ func New(cfg Config) Model {
 		focused:      true,
 		loading:      true,
 		theme:        NewTheme(true),
+		s:            s,
 		spinner:      sp,
 		filter:       fi,
 		help:         h,
 		detail:       vp,
-		keys:         DefaultKeyMap(),
-		filterKeys:   DefaultFilterKeyMap(),
+		keys:         DefaultKeyMap(s),
+		filterKeys:   DefaultFilterKeyMap(s),
 		now:          time.Now(),
 	}
 }
@@ -294,7 +300,7 @@ type metrics struct {
 // about how many rows fit.
 func (m Model) metrics() metrics {
 	mt := metrics{
-		innerW: max(m.width-4, 20),
+		innerW: m.innerWidth(),
 		innerH: max(m.height-2, 6),
 	}
 
@@ -323,6 +329,16 @@ func (m Model) metrics() metrics {
 		mt.listW = 0
 	}
 	return mt
+}
+
+// innerWidth is the drawable width inside the frame: the terminal less the
+// border and the frame's horizontal padding.
+//
+// It is computed here rather than read off metrics because footerView needs it
+// and metrics needs footerView; deriving it from m.width alone keeps that from
+// becoming a cycle.
+func (m Model) innerWidth() int {
+	return max(m.width-4, 20)
 }
 
 // footerHeight measures the rendered footer so metrics can reserve exactly the

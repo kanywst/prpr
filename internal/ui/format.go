@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -11,22 +12,20 @@ import (
 )
 
 // humanAge renders a duration the way a person would say it out loud.
-func humanAge(d time.Duration) string {
+func humanAge(d time.Duration, s Strings) string {
 	switch {
-	case d < 0:
-		return "いま"
 	case d < time.Minute:
-		return "いま"
+		return s.AgeNow
 	case d < time.Hour:
-		return strconv.Itoa(int(d.Minutes())) + "分"
+		return fmt.Sprintf(s.AgeMin, int(d.Minutes()))
 	case d < 24*time.Hour:
-		return strconv.Itoa(int(d.Hours())) + "時間"
+		return fmt.Sprintf(s.AgeHour, int(d.Hours()))
 	case d < 7*24*time.Hour:
-		return strconv.Itoa(int(d.Hours()/24)) + "日"
+		return fmt.Sprintf(s.AgeDay, int(d.Hours()/24))
 	case d < 35*24*time.Hour:
-		return strconv.Itoa(int(d.Hours()/24/7)) + "週間"
+		return fmt.Sprintf(s.AgeWeek, int(d.Hours()/24/7))
 	default:
-		return strconv.Itoa(int(d.Hours()/24/30)) + "ヶ月"
+		return fmt.Sprintf(s.AgeMonth, int(d.Hours()/24/30))
 	}
 }
 
@@ -50,6 +49,23 @@ func checkIcon(c gh.Check, isDraft bool) string {
 	}
 }
 
+// checkWord spells out a rolled-up CI state.
+func checkWord(c gh.Check, isDraft bool, s Strings) string {
+	if isDraft {
+		return s.CheckDraft
+	}
+	switch c {
+	case gh.CheckSuccess:
+		return s.CheckPass
+	case gh.CheckPending, gh.CheckExpected:
+		return s.CheckRun
+	case gh.CheckFailure, gh.CheckError:
+		return s.CheckFail
+	default:
+		return s.CheckNone
+	}
+}
+
 // reviewIcon maps a review decision to a glyph, or "" when the repository has
 // no review requirement at all.
 func reviewIcon(r gh.Review) string {
@@ -67,17 +83,31 @@ func reviewIcon(r gh.Review) string {
 	}
 }
 
-// stateWord describes how a pull request left the list, for the farewell band.
-func stateWord(s gh.State) (icon, word string) {
-	switch s {
-	case gh.StateMerged:
-		return "🎉", "マージされたよ〜 おめでとう!"
-	case gh.StateClosed:
-		return "🌙", "クローズされたよ"
-	case gh.StateOpen:
-		return "👋", "一覧から外れたよ"
+// reviewWord spells out a review decision.
+func reviewWord(r gh.Review, s Strings) string {
+	switch r {
+	case gh.ReviewApproved:
+		return s.ReviewApproved
+	case gh.ReviewChanges:
+		return s.ReviewChanges
+	case gh.ReviewRequired:
+		return s.ReviewRequired
 	default:
-		return "👋", "一覧から外れたよ"
+		return ""
+	}
+}
+
+// stateWord describes how a pull request left the list, for the farewell band.
+func stateWord(st gh.State, s Strings) (icon, word string) {
+	switch st {
+	case gh.StateMerged:
+		return "🎉", s.FarewellMerged
+	case gh.StateClosed:
+		return "🌙", s.FarewellClosed
+	case gh.StateOpen:
+		return "👋", s.FarewellDropped
+	default:
+		return "👋", s.FarewellDropped
 	}
 }
 

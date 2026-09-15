@@ -23,7 +23,7 @@ type Client struct {
 func New() (*Client, error) {
 	c, err := api.DefaultGraphQLClient()
 	if err != nil {
-		return nil, fmt.Errorf("gh の認証情報が読めなかった (gh auth login 済み?): %w", err)
+		return nil, fmt.Errorf("could not read the gh CLI credentials (has gh auth login been run?): %w", err)
 	}
 	return &Client{gql: c}, nil
 }
@@ -53,7 +53,7 @@ type viewerResponse struct {
 func (c *Client) Viewer(ctx context.Context) (login string, orgs []string, err error) {
 	var resp viewerResponse
 	if err := c.gql.DoWithContext(ctx, viewerQuery, nil, &resp); err != nil {
-		return "", nil, fmt.Errorf("ログインユーザーの取得に失敗: %w", err)
+		return "", nil, fmt.Errorf("could not resolve the logged-in user: %w", err)
 	}
 	orgs = make([]string, 0, len(resp.Viewer.Organizations.Nodes))
 	for _, n := range resp.Viewer.Organizations.Nodes {
@@ -175,7 +175,7 @@ func (c *Client) SearchOpenPRs(ctx context.Context, owners []string) ([]PR, erro
 		}
 		var resp searchResponse
 		if err := c.gql.DoWithContext(ctx, searchQuery, vars, &resp); err != nil {
-			return nil, fmt.Errorf("%s の PR 検索に失敗: %w", owner, err)
+			return nil, fmt.Errorf("pull request search for %s failed: %w", owner, err)
 		}
 
 		for _, n := range resp.Search.Nodes {
@@ -224,12 +224,12 @@ type stateResponse struct {
 func (c *Client) State(ctx context.Context, repo string, number int) (State, error) {
 	owner, name, ok := strings.Cut(repo, "/")
 	if !ok {
-		return "", fmt.Errorf("リポジトリ名が owner/name 形式じゃない: %q", repo)
+		return "", fmt.Errorf("repository is not in owner/name form: %q", repo)
 	}
 	vars := map[string]any{"owner": owner, "name": name, "number": number}
 	var resp stateResponse
 	if err := c.gql.DoWithContext(ctx, stateQuery, vars, &resp); err != nil {
-		return "", fmt.Errorf("%s#%d の状態取得に失敗: %w", repo, number, err)
+		return "", fmt.Errorf("could not read the state of %s#%d: %w", repo, number, err)
 	}
 	return State(resp.Repository.PullRequest.State), nil
 }

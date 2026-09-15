@@ -352,6 +352,43 @@ func TestScrollingKeepsCursorVisible(t *testing.T) {
 	}
 }
 
+func TestEscapeClearsTheFilterWithoutQuitting(t *testing.T) {
+	now := time.Now()
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m, _ = step(t, m, ownersMsg{me: "kanywst"})
+	m, _ = step(t, m, prsMsg{prs: samplePRs(now), at: now})
+
+	// Filter, accept it with enter, then press esc to clear: esc used to be a
+	// quit key, so this sequence killed the program instead.
+	m, _ = step(t, m, tea.KeyPressMsg{Code: '/', Text: "/"})
+	m.filter.SetValue("readme")
+	m.recompute()
+	m, _ = step(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.mode != modeList {
+		t.Fatal("enter did not leave filter mode")
+	}
+
+	m, cmd := step(t, m, tea.KeyPressMsg{Code: tea.KeyEscape})
+	if m.quit {
+		t.Fatal("esc quit the program")
+	}
+	if cmd != nil {
+		t.Errorf("esc produced a command (%T); it should only clear the filter", cmd())
+	}
+	if m.filter.Value() != "" {
+		t.Errorf("filter = %q after esc, want cleared", m.filter.Value())
+	}
+	if len(m.visible) != 3 {
+		t.Errorf("visible = %d after clearing, want 3", len(m.visible))
+	}
+
+	// A second esc, with nothing to clear, must still not quit.
+	m, _ = step(t, m, tea.KeyPressMsg{Code: tea.KeyEscape})
+	if m.quit {
+		t.Error("esc on an unfiltered list quit the program")
+	}
+}
+
 func TestFilterModeRoundTrip(t *testing.T) {
 	now := time.Now()
 	m := testModel(t, &fakeFetcher{me: "kanywst"})

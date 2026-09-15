@@ -10,24 +10,29 @@ import (
 )
 
 func TestHumanAge(t *testing.T) {
+	en := Catalog(LangEN)
 	tests := []struct {
 		in   time.Duration
 		want string
 	}{
-		{-time.Hour, "いま"},
-		{30 * time.Second, "いま"},
-		{90 * time.Second, "1分"},
-		{59 * time.Minute, "59分"},
-		{3 * time.Hour, "3時間"},
-		{47 * time.Hour, "1日"},
-		{6 * 24 * time.Hour, "6日"},
-		{10 * 24 * time.Hour, "1週間"},
-		{60 * 24 * time.Hour, "2ヶ月"},
+		{-time.Hour, "just now"}, // a clock skewed into the future reads as now
+		{30 * time.Second, "just now"},
+		{90 * time.Second, "1m"},
+		{59 * time.Minute, "59m"},
+		{3 * time.Hour, "3h"},
+		{47 * time.Hour, "1d"},
+		{6 * 24 * time.Hour, "6d"},
+		{10 * 24 * time.Hour, "1w"},
+		{60 * 24 * time.Hour, "2mo"},
 	}
 	for _, tt := range tests {
-		if got := humanAge(tt.in); got != tt.want {
+		if got := humanAge(tt.in, en); got != tt.want {
 			t.Errorf("humanAge(%v) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+
+	if got := humanAge(3*time.Hour, Catalog(LangJA)); got != "3時間" {
+		t.Errorf("humanAge in Japanese = %q, want %q", got, "3時間")
 	}
 }
 
@@ -113,10 +118,11 @@ func TestPadReachesExactWidth(t *testing.T) {
 }
 
 func TestStateWord(t *testing.T) {
-	if icon, _ := stateWord(gh.StateMerged); icon != "🎉" {
+	en := Catalog(LangEN)
+	if icon, _ := stateWord(gh.StateMerged, en); icon != "🎉" {
 		t.Errorf("merged icon = %q, want 🎉", icon)
 	}
-	if icon, _ := stateWord(gh.StateClosed); icon != "🌙" {
+	if icon, _ := stateWord(gh.StateClosed, en); icon != "🌙" {
 		t.Errorf("closed icon = %q, want 🌙", icon)
 	}
 }

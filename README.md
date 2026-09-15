@@ -1,141 +1,124 @@
 # 🌸 prpr
 
-[![CI](https://github.com/kanywst/prpr/actions/workflows/ci.yml/badge.svg)](https://github.com/kanywst/prpr/actions/workflows/ci.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/kanywst/prpr.svg)](https://pkg.go.dev/github.com/kanywst/prpr)
-[![Go Report Card](https://goreportcard.com/badge/github.com/kanywst/prpr)](https://goreportcard.com/report/github.com/kanywst/prpr)
-[![Release](https://img.shields.io/github/v/release/kanywst/prpr?logo=github)](https://github.com/kanywst/prpr/releases/latest)
-[![Go](https://img.shields.io/github/go-mod/go-version/kanywst/prpr?logo=go)](go.mod)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/kanywst/prpr/actions/workflows/ci.yml/badge.svg)](https://github.com/kanywst/prpr/actions/workflows/ci.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/kanywst/prpr.svg)](https://pkg.go.dev/github.com/kanywst/prpr) [![Go Report Card](https://goreportcard.com/badge/github.com/kanywst/prpr)](https://goreportcard.com/report/github.com/kanywst/prpr) [![Release](https://img.shields.io/github/v/release/kanywst/prpr?sort=semver)](https://github.com/kanywst/prpr/releases/latest) [![Go version](https://img.shields.io/github/go-mod/go-version/kanywst/prpr)](go.mod) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-自分が見られる GitHub の **open PR を全部まとめて眺める TUI**。`enter` でブラウザが開いて、マージされたら 🎉 と一緒に消えていく。
+**English** | [日本語](README.ja.md)
 
-対象の owner は自動で決まる: **ログインユーザー自身 + 所属している全 org**。設定ファイルはいらない。
+**prpr** puts every open GitHub pull request you can see on one screen. Press enter to open one in the browser, and watch it wave goodbye with a 🎉 when it gets merged.
 
-## デモ
+There is nothing to configure. prpr asks GitHub who you are and watches **your own account plus every org you belong to**, so it shows the right pull requests for whoever runs it.
 
-```text
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ 🌸 prpr  kanywst · 0-draft                                                             ⟳ 61s ┃
-┃ ──────────────────────────────────────────────────────────────────────────────────────────── ┃
-┃ ▸ すべて 3  │  自分の 2  │  レビュー待ち 1  │  下書き 1                                      ┃
-┃                                                                                              ┃
-┃ 🌟 🎉 0-draft/api#127 fix: nil deref on empty body マージされたよ〜 おめでとう!              ┃
-┃                                                                                              ┃
-┃ ▸ #128 🟢✅ api: add rate limiter                                                            ┃
-┃      👤 kanywst  ⏱ 2時間  📈 +142/-9  💬 3                                      0-draft/api  ┃
-┃                                                                                              ┃
-┃   #127 🟡👀 fix: nil deref on empty body                                                     ┃
-┃      👤 alice  ⏱ 5時間  📈 +8/-2  💬 0                                          0-draft/api  ┃
-┃                                                                                              ┃
-┃   #12 📝 docs: update README                                                                 ┃
-┃      👤 kanywst  ⏱ 1週間  📈 +31/-0  💬 0                                      kanywst/prpr  ┃
-┃                                                                                              ┃
-┃ ⏎ ブラウザで開く • r 更新 • tab 次のタブ • / 絞り込み • d 詳細 • ? ヘルプ • q バイバイ       ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-```
+![prpr walking through a list of pull requests, opening the detail pane, filtering, switching tabs, and showing a merge banner](docs/demo.gif)
 
-## できること
+## What it does
 
-- **owner 自動検出** — ログインユーザーと所属 org を GitHub に聞いて、そこの open PR を全部並べる
-- **マージ検知** — 一覧から消えた PR の最終状態を引いて、🎉 バナーを数秒出してからフェードアウト
-- **4 つのタブ** — すべて / 自分の / レビュー待ち / 下書き。それぞれ件数バッジ付き
-- **絞り込み** — `/` でタイトル・リポ・作者・`#番号`・ラベルを横断検索。スペース区切りは AND
-- **詳細ペイン** — `d` でブランチ・差分・レビュアー・本文。幅 100 桁以上なら左右分割、狭ければ全面
-- **自動更新** — 既定 60 秒ごと。ヘッダーに次の更新までのカウントダウンが出る
-- **バックグラウンドでは止まる** — ターミナルがフォーカスを失うとポーリングを停止 (`⏸ 休憩中`)
-- **マウス対応** — クリックで選択、ホイールでスクロール
-- **ライト / ダーク自動切り替え** — 端末の背景色を検出してパレットを組み替える
-- **`gh` の認証を使い回す** — トークンの設定は不要
+- **Finds its own owners.** Asks GitHub for your login and your orgs at startup, then lists every open pull request under them.
+- **Notices merges.** When a pull request leaves the list, prpr looks up how it ended and shows a farewell banner for a few seconds before it fades.
+- **Four tabs.** Everything, yours, awaiting your review, and drafts, each with a live count.
+- **Filtering.** `/` searches titles, repositories, authors, `#number` and labels at once. Space-separated terms are ANDed.
+- **Detail pane.** `d` shows the branch, the diff stat, reviewers and the body. Side by side at 100 columns or wider, full width when narrower.
+- **Auto refresh.** Every 60 seconds by default, with a countdown in the header.
+- **Stops when you are away.** Polling pauses while the terminal does not have focus.
+- **Mouse support.** Click to select, wheel to scroll.
+- **Light and dark.** The palette is derived from the terminal's reported background color.
+- **English or Japanese.** English by default; `--lang ja` switches the whole interface.
+- **Reuses `gh`.** No token to configure.
 
-## インストール
+## Install
 
-`gh` CLI がログイン済みであることが前提 (`gh auth login`)。prpr はその認証情報をそのまま使う。
+prpr borrows the `gh` CLI's stored credentials, so `gh auth login` has to have been run.
 
 ```bash
 go install github.com/kanywst/prpr@latest
 ```
 
-[Releases](https://github.com/kanywst/prpr/releases/latest) からビルド済みバイナリを落としてもいい。
+Prebuilt binaries are on the [releases page](https://github.com/kanywst/prpr/releases/latest).
 
-## 使い方
+## Usage
 
 ```bash
 prpr
 ```
 
-オプション:
-
-| フラグ | 既定値 | 説明 |
+| Flag | Default | Meaning |
 | --- | --- | --- |
-| `--owner` | 自動検出 | 監視する owner。繰り返し・カンマ区切り可 |
-| `--interval` | `1m` | 自動更新の間隔 (最小 `5s`) |
-| `--timeout` | `20s` | 1 回の更新のタイムアウト |
-| `--version` | | バージョンを表示して終了 |
+| `--owner` | discovered | Owner to watch. Repeatable, and accepts a comma-separated list |
+| `--interval` | `1m` | Auto-refresh interval (minimum `5s`) |
+| `--timeout` | `20s` | Timeout for a single refresh |
+| `--lang` | `en` | Interface language: `en` or `ja` |
+| `--demo` | off | Run against a fixed fixture list instead of GitHub |
+| `--version` | | Print the version and exit |
 
-例:
+For example:
 
 ```bash
-# org をひとつだけ見る
+# watch a single org
 prpr --owner 0-draft
 
-# 30 秒ごとに更新
+# refresh every 30 seconds
 prpr --interval 30s
+
+# Japanese interface
+prpr --lang ja
 ```
 
-### キーバインド
+### Keys
 
-| キー | 動作 |
+| Key | Action |
 | --- | --- |
-| `↑` / `k`, `↓` / `j` | カーソル移動 |
-| `g` / `G` | 先頭 / 末尾 |
-| `pgup` / `pgdn` | ページ送り |
-| `tab` / `shift+tab` | タブ切り替え |
-| `enter` / `o` | ブラウザで開く |
-| `y` | URL をクリップボードにコピー |
-| `d` | 詳細ペインの開閉 |
-| `ctrl+u` / `ctrl+d` | 詳細ペインをスクロール |
-| `r` | 今すぐ更新 |
-| `/` | 絞り込み (`esc` で解除) |
-| `?` | ヘルプの詳細表示 |
-| `ctrl+z` | 一時停止 |
-| `q` / `ctrl+c` | 終了 |
+| `↑` / `k`, `↓` / `j` | Move the cursor |
+| `g` / `G` | First / last |
+| `pgup` / `pgdn` | Page |
+| `tab` / `shift+tab` | Switch tabs |
+| `enter` / `o` | Open in the browser |
+| `y` | Copy the URL |
+| `d` | Toggle the detail pane |
+| `ctrl+u` / `ctrl+d` | Scroll the detail pane |
+| `r` | Refresh now |
+| `/` | Filter |
+| `esc` | Clear the filter |
+| `?` | Expand the help |
+| `ctrl+z` | Suspend |
+| `q` / `ctrl+c` | Quit |
 
-### アイコン
+### Icons
 
-| アイコン | 意味 |
+| Icon | Meaning |
 | --- | --- |
-| 🟢 / 🟡 / 🔴 / ⚪ | CI 通過 / 実行中 / 失敗 / なし |
-| 📝 | 下書き |
-| ✅ / 🔁 / 👀 | 承認済み / 変更依頼 / レビュー待ち |
+| 🟢 / 🟡 / 🔴 / ⚪ | Checks passing / running / failing / none |
+| 📝 | Draft |
+| ✅ / 🔁 / 👀 | Approved / changes requested / review requested |
 
-## 構成
+## Layout
 
-| パッケージ | 役割 |
+| Package | Role |
 | --- | --- |
-| `internal/gh` | ドメイン型 (`PR`) と GitHub GraphQL アダプタ |
-| `internal/browser` | URL を開く OS 依存部分 |
-| `internal/ui` | Bubble Tea の MVU。純粋関数と状態を分離 |
-| `main.go` | フラグ解析と配線 |
+| `internal/gh` | The domain type (`PR`) and the GitHub GraphQL adapter |
+| `internal/browser` | The one OS-dependent side effect |
+| `internal/demo` | The fixture list behind `--demo` |
+| `internal/ui` | The Bubble Tea MVU loop, with pure helpers kept apart from state |
+| `main.go` | Flag parsing and wiring |
 
-インターフェース (`ui.Fetcher`) は利用側で定義してあるので、テストは GitHub に触らずにモデル全体を駆動できる。
+`ui.Fetcher` is declared at the point of use, so the whole model is drivable in tests without network access.
 
-[Bubble Tea v2](https://github.com/charmbracelet/bubbletea) / [Bubbles v2](https://github.com/charmbracelet/bubbles) / [Lip Gloss v2](https://github.com/charmbracelet/lipgloss) / [go-gh](https://github.com/cli/go-gh) の上に乗っている。
+Built on [Bubble Tea v2](https://github.com/charmbracelet/bubbletea), [Bubbles v2](https://github.com/charmbracelet/bubbles), [Lip Gloss v2](https://github.com/charmbracelet/lipgloss) and [go-gh](https://github.com/cli/go-gh).
 
-## 開発
+## Development
 
 ```bash
 make check   # fmt + vet + lint + test
-make test    # race 付きテスト
+make test    # tests with the race detector
 make build   # ./bin/prpr
-make help    # ターゲット一覧
+make demo    # re-record docs/demo.gif with VHS
+make help    # list targets
 ```
 
-レンダリング結果を目で見たいときはこれ:
+To look at the rendered UI without a terminal:
 
 ```bash
 go test ./internal/ui -run TestDumpRender -v
 ```
 
-## ライセンス
+## License
 
 [MIT](LICENSE)
