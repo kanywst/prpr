@@ -66,7 +66,7 @@ type Strings struct {
 	DetailUpdated   string
 	DetailCreated   string
 	DetailBranch    string
-	DetailDiff      string // two %d, then FilesSuffix
+	DetailDiff      string
 	DetailComments  string
 	DetailLabels    string
 	DetailReviewers string
