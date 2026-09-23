@@ -537,3 +537,18 @@ func TestElsewhereTabAndScopes(t *testing.T) {
 		t.Errorf("elsewhere tab = %v, want just %s", m.visible, outside.Key())
 	}
 }
+
+func TestDiscoveryHonorsExcludeOwners(t *testing.T) {
+	f := &fakeFetcher{me: "kanywst", orgs: []string{"0-draft", "Noisy"}, pages: [][]gh.PR{nil}}
+	m := New(Config{Fetcher: f, ExcludeOwners: []string{"noisy"}, Interval: time.Minute, Timeout: time.Second})
+
+	for _, msg := range drain(m.discoverOwnersCmd()) {
+		o, ok := msg.(ownersMsg)
+		if !ok {
+			t.Fatalf("got %T, want ownersMsg", msg)
+		}
+		if !slices.Equal(o.owners, []string{"kanywst", "0-draft"}) {
+			t.Errorf("owners = %v, want the excluded org dropped", o.owners)
+		}
+	}
+}

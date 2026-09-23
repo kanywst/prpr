@@ -2,6 +2,8 @@ package ui
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -57,7 +59,7 @@ func tickCmd() tea.Cmd {
 // discoverOwnersCmd resolves which owners to watch from the authenticated
 // user, so prpr needs no per-user configuration to be useful.
 func (m Model) discoverOwnersCmd() tea.Cmd {
-	fetcher, timeout := m.fetcher, m.timeout
+	fetcher, timeout, exclude := m.fetcher, m.timeout, m.excludeOwners
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
@@ -66,7 +68,13 @@ func (m Model) discoverOwnersCmd() tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-		return ownersMsg{me: me, owners: append([]string{me}, orgs...)}
+		owners := make([]string, 0, len(orgs)+1)
+		for _, o := range append([]string{me}, orgs...) {
+			if !slices.ContainsFunc(exclude, func(x string) bool { return strings.EqualFold(x, o) }) {
+				owners = append(owners, o)
+			}
+		}
+		return ownersMsg{me: me, owners: owners}
 	}
 }
 
@@ -93,7 +101,9 @@ func (m Model) viewerCmd() tea.Cmd {
 // here too, so a start-up that could not reach GitHub recovers on its own
 // instead of sitting on an error until the program is restarted.
 func (m Model) refreshCmd() tea.Cmd {
-	if len(m.owners) == 0 {
+	// Discovery can legitimately leave no owners, when exclude_owners drops
+	// them all; knowing the login is what says it has run.
+	if len(m.owners) == 0 && m.me == "" {
 		return m.discoverOwnersCmd()
 	}
 	if m.me == "" {

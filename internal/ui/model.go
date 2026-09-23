@@ -37,6 +37,9 @@ type Config struct {
 	// them from the authenticated user: their own account plus every org they
 	// belong to.
 	Owners []string
+	// ExcludeOwners drops owners from the discovered list. It has no effect
+	// on pinned Owners.
+	ExcludeOwners []string
 	// Interval is how often the list auto-refreshes.
 	Interval time.Duration
 	// Timeout bounds a single refresh.
@@ -91,9 +94,10 @@ type Model struct {
 
 	// pinnedOwners is non-empty when the user passed --owner, in which case
 	// owner discovery is skipped entirely.
-	pinnedOwners []string
-	owners       []string
-	me           string
+	pinnedOwners  []string
+	excludeOwners []string
+	owners        []string
+	me            string
 
 	prs     []gh.PR
 	visible []gh.PR
@@ -163,6 +167,7 @@ func New(cfg Config) Model {
 		authored:       cfg.Authored,
 		reviewRequests: cfg.ReviewRequests,
 		pinnedOwners:   cfg.Owners,
+		excludeOwners:  cfg.ExcludeOwners,
 		owners:         cfg.Owners,
 		focused:        true,
 		loading:        true,
