@@ -133,19 +133,55 @@ func TestPinnedOwnersSkipDiscovery(t *testing.T) {
 	f := &fakeFetcher{me: "kanywst", orgs: []string{"0-draft"}, pages: [][]gh.PR{nil}}
 	m := New(Config{Fetcher: f, Owners: []string{"someone-else"}, Interval: time.Minute, Timeout: time.Second})
 
+	var me, fetched bool
 	for _, msg := range drain(m.Init()) {
-		if o, ok := msg.(ownersMsg); ok {
-			if len(o.owners) != 1 || o.owners[0] != "someone-else" {
-				t.Errorf("owners = %v, want [someone-else]", o.owners)
-			}
+		switch msg := msg.(type) {
+		case ownersMsg:
+			t.Errorf("pinned owners still ran discovery: %v", msg)
+		case meMsg:
 			// The login is still resolved, so the identity tabs keep working.
-			if o.me != "kanywst" {
-				t.Errorf("me = %q, want kanywst", o.me)
-			}
-			return
+			me = msg.me == "kanywst"
+		case prsMsg:
+			fetched = true
 		}
 	}
-	t.Fatal("Init did not produce an ownersMsg")
+	if !me {
+		t.Error("Init did not resolve the viewer's login")
+	}
+	// The pinned owners are enough to fetch; the login lookup does not gate it.
+	if !fetched {
+		t.Error("Init did not fetch the pinned owners")
+	}
+}
+
+func TestFailedDiscoveryIsRetried(t *testing.T) {
+	f := &fakeFetcher{err: errors.New("offline")}
+	m := testModel(t, f)
+
+	for _, msg := range drain(m.Init()) {
+		m, _ = step(t, m, msg)
+	}
+	if m.lastErr == nil || len(m.owners) != 0 {
+		t.Fatalf("after a failed start: lastErr=%v owners=%v", m.lastErr, m.owners)
+	}
+
+	// Once the interval passes, the next refresh retries discovery rather than
+	// giving up because there are no owners to fetch.
+	f.err = nil
+	f.me, f.pages = "kanywst", [][]gh.PR{nil}
+	m.now = m.lastFetch.Add(2 * time.Minute)
+	if !m.refreshDue() {
+		t.Fatal("refreshDue() = false after a failed discovery")
+	}
+	var found bool
+	for _, msg := range drain(m.refreshCmd()) {
+		if o, ok := msg.(ownersMsg); ok && o.me == "kanywst" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("refresh did not retry owner discovery")
+	}
 }
 
 func TestTabsPartitionByViewer(t *testing.T) {

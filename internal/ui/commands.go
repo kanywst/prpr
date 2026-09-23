@@ -17,6 +17,10 @@ type ownersMsg struct {
 	owners []string
 }
 
+// meMsg carries the viewer's login for pinned owners. An empty login means the
+// lookup failed and is retried on the next refresh.
+type meMsg struct{ me string }
+
 // prsMsg carries a completed refresh.
 type prsMsg struct {
 	prs []gh.PR
@@ -64,18 +68,34 @@ func (m Model) discoverOwnersCmd() tea.Cmd {
 
 // viewerCmd resolves just the viewer's login. It is used when --owner pinned
 // the owner list but the identity-based tabs still need to know who "me" is.
+// It runs alongside the first fetch rather than gating it: the pinned owners
+// are all a fetch needs, and a failed lookup here is retried on the next
+// refresh instead of holding the list hostage.
 func (m Model) viewerCmd() tea.Cmd {
-	fetcher, timeout, owners := m.fetcher, m.timeout, m.pinnedOwners
+	fetcher, timeout := m.fetcher, m.timeout
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
 		me, _, err := fetcher.Viewer(ctx)
 		if err != nil {
-			return errMsg{err}
+			return meMsg{}
 		}
-		return ownersMsg{me: me, owners: owners}
+		return meMsg{me: me}
 	}
+}
+
+// refreshCmd does whatever the next refresh needs. Owner discovery is retried
+// here too, so a start-up that could not reach GitHub recovers on its own
+// instead of sitting on an error until the program is restarted.
+func (m Model) refreshCmd() tea.Cmd {
+	if len(m.owners) == 0 {
+		return m.discoverOwnersCmd()
+	}
+	if m.me == "" {
+		return tea.Batch(m.viewerCmd(), m.fetchCmd())
+	}
+	return m.fetchCmd()
 }
 
 // fetchCmd refreshes the open pull request list.

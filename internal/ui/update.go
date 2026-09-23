@@ -20,12 +20,7 @@ func (m Model) Init() tea.Cmd {
 		m.spinner.Tick,
 		tickCmd(),
 	}
-	if len(m.pinnedOwners) > 0 {
-		cmds = append(cmds, m.viewerCmd())
-	} else {
-		cmds = append(cmds, m.discoverOwnersCmd())
-	}
-	return tea.Batch(cmds...)
+	return tea.Batch(append(cmds, m.refreshCmd())...)
 }
 
 // Update handles a single message.
@@ -66,6 +61,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recompute()
 		m.loading = true
 		return m, m.fetchCmd()
+
+	case meMsg:
+		if msg.me != "" {
+			m.me = msg.me
+			m.recompute()
+		}
+		return m, nil
 
 	case prsMsg:
 		return m.handlePRs(msg)
@@ -113,7 +115,7 @@ func (m Model) handleTick(now time.Time) (tea.Model, tea.Cmd) {
 	cmds := []tea.Cmd{tickCmd()}
 	if m.refreshDue() {
 		m.loading = true
-		cmds = append(cmds, m.fetchCmd())
+		cmds = append(cmds, m.refreshCmd())
 	}
 	return m, tea.Batch(cmds...)
 }
@@ -121,7 +123,7 @@ func (m Model) handleTick(now time.Time) (tea.Model, tea.Cmd) {
 // refreshDue reports whether the automatic refresh should fire now.
 func (m Model) refreshDue() bool {
 	switch {
-	case m.loading, !m.focused, len(m.owners) == 0, m.lastFetch.IsZero():
+	case m.loading, !m.focused, m.lastFetch.IsZero():
 		return false
 	default:
 		return m.nextFetchIn() <= 0
@@ -273,9 +275,9 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.detail.HalfPageDown()
 
 	case key.Matches(msg, m.keys.Refresh):
-		if !m.loading && len(m.owners) > 0 {
+		if !m.loading {
 			m.loading = true
-			return m, m.fetchCmd()
+			return m, m.refreshCmd()
 		}
 
 	case key.Matches(msg, m.keys.Filter):
