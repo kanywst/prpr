@@ -140,8 +140,10 @@ func (m Model) stateCmd(pr gh.PR, capped bool) tea.Cmd {
 		state, err := fetcher.State(ctx, pr.Repo, pr.Number)
 		if err != nil {
 			// A disappearance we cannot explain is still worth waving at, and
-			// is not worth interrupting the user with an error.
-			return goneMsg{pr: pr, state: gh.StateOpen, capped: capped}
+			// is not worth interrupting the user with an error. It is not
+			// marked capped: that suppression is for a PR confirmed still
+			// open, and this one's state is unknown.
+			return goneMsg{pr: pr, state: gh.StateOpen}
 		}
 		return goneMsg{pr: pr, state: state, capped: capped}
 	}

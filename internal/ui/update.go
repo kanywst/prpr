@@ -171,7 +171,7 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 			case msg.res.Unsure(old):
 				prs = append(prs, old)
 				carried = true
-			case msg.res.ReviewOnly(old):
+			case msg.res.ReviewOnly(old) && !msg.res.Capped(old):
 			default:
 				cmds = append(cmds, m.stateCmd(old, msg.res.Capped(old)))
 			}

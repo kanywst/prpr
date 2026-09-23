@@ -579,3 +579,46 @@ func TestSubmittedOutsideReviewLeavesQuietly(t *testing.T) {
 		t.Errorf("list = %v, want it gone", m.prs)
 	}
 }
+
+// stateErrFetcher fails every State lookup.
+type stateErrFetcher struct{ fakeFetcher }
+
+func (stateErrFetcher) State(context.Context, string, int) (gh.State, error) {
+	return "", errors.New("lookup failed")
+}
+
+func TestCappedPRWithFailedLookupStillWaves(t *testing.T) {
+	m := testModel(t, &stateErrFetcher{})
+	msgs := drain(m.stateCmd(gh.PR{Repo: "o/r", Number: 1}, true))
+	if len(msgs) != 1 {
+		t.Fatalf("got %d messages, want 1", len(msgs))
+	}
+	m, _ = step(t, m, msgs[0])
+	if len(m.farewells) != 1 {
+		t.Error("a capped PR whose state lookup failed vanished without a farewell")
+	}
+}
+
+func TestCappedReviewRequestIsLookedUp(t *testing.T) {
+	now := time.Now()
+	m := testModel(t, &fakeFetcher{})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst"}})
+
+	outside := gh.PR{Repo: "someone/lib", Number: 7, Author: "alice", Reviewers: []string{"kanywst"}, UpdatedAt: now}
+	outcomes := []gh.Outcome{
+		{Scope: gh.OwnerScope("kanywst")},
+		{Scope: gh.ReviewRequestedScope("kanywst"), Total: gh.SearchLimit + 1},
+	}
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: []gh.PR{outside}, Outcomes: outcomes}, at: now})
+
+	// Pushed past the cap of a truncated review-request search: that is not
+	// evidence the review was done, so prpr asks rather than dropping it.
+	_, cmd := step(t, m, prsMsg{res: gh.Result{Outcomes: outcomes}, at: now.Add(time.Minute)})
+	msgs := drain(cmd)
+	if len(msgs) != 1 {
+		t.Fatalf("got %d messages, want a state lookup", len(msgs))
+	}
+	if g, ok := msgs[0].(goneMsg); !ok || !g.capped {
+		t.Errorf("got %#v, want a capped goneMsg", msgs[0])
+	}
+}
