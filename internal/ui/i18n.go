@@ -92,6 +92,9 @@ type Strings struct {
 	CopiedURL       string
 	ClipboardFailed string
 
+	WarnFailed string // one %s: the scopes that could not be searched
+	WarnCapped string // %s: the scope, %d: how many it returned, %d: how many matched
+
 	FilterPlaceholder string
 
 	HelpUp          string
@@ -184,6 +187,9 @@ var english = Strings{
 	CopiedURL:       "URL copied",
 	ClipboardFailed: "the clipboard was not available",
 
+	WarnFailed: "⚠ skipped %s",
+	WarnCapped: "⚠ %s: %d of %d",
+
 	FilterPlaceholder: "title / repo / author / #number",
 
 	HelpUp:          "up",
@@ -267,6 +273,9 @@ var japanese = Strings{
 	OpenedInBrowser: "ブラウザで開いたよ",
 	CopiedURL:       "URL コピーしたよ",
 	ClipboardFailed: "クリップボードが使えなかった",
+
+	WarnFailed: "⚠ %s は取得失敗",
+	WarnCapped: "⚠ %s は %d/%d 件のみ",
 
 	FilterPlaceholder: "タイトル / リポ / 作者 / #番号",
 

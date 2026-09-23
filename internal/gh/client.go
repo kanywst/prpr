@@ -2,17 +2,19 @@ package gh
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/cli/go-gh/v2/pkg/api"
 )
 
-// searchLimit caps how many PRs a single owner contributes. GitHub's search
+// SearchLimit caps how many PRs a single scope contributes. GitHub's search
 // API refuses anything above 100 per page, and a dashboard past this size has
 // stopped being a dashboard anyway.
-const searchLimit = 60
+const SearchLimit = 60
 
 // Client talks to the GitHub GraphQL API as the logged-in gh user.
 type Client struct {
@@ -66,6 +68,7 @@ func (c *Client) Viewer(ctx context.Context) (login string, orgs []string, err e
 const searchQuery = `
 query($q: String!, $limit: Int!) {
   search(query: $q, type: ISSUE, first: $limit) {
+    issueCount
     nodes {
       ... on PullRequest {
         number
@@ -104,7 +107,8 @@ query($q: String!, $limit: Int!) {
 
 type searchResponse struct {
 	Search struct {
-		Nodes []searchNode `json:"nodes"`
+		IssueCount int          `json:"issueCount"`
+		Nodes      []searchNode `json:"nodes"`
 	} `json:"search"`
 }
 
@@ -158,38 +162,80 @@ type searchNode struct {
 	} `json:"commits"`
 }
 
-// SearchOpenPRs returns every open pull request under the given owners, most
+// searchConcurrency bounds how many scope searches are in flight at once:
+// enough that a handful of orgs does not add up to a slow refresh, few enough
+// to stay clear of GitHub's secondary rate limits on search.
+const searchConcurrency = 4
+
+// Search runs every scope and returns the union of what they found, most
 // recently updated first.
 //
-// Owners are queried one at a time rather than OR-ed into a single search:
-// per-owner semantics are unambiguous, a failure names the owner that caused
-// it, and the owner list is short by construction.
-func (c *Client) SearchOpenPRs(ctx context.Context, owners []string) ([]PR, error) {
+// Scopes are searched separately rather than OR-ed into one query: per-scope
+// semantics are unambiguous, and one scope failing (an org that enforces SAML
+// SSO the token is not authorized for, say) costs only that scope's pull
+// requests instead of the whole refresh. The error is non-nil only when every
+// scope failed, since then there is nothing to show at all.
+func (c *Client) Search(ctx context.Context, scopes []Scope) (Result, error) {
+	type answer struct {
+		prs     []PR
+		outcome Outcome
+	}
+	answers := make([]answer, len(scopes))
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, searchConcurrency)
+	for i, scope := range scopes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			prs, total, err := c.search(ctx, scope)
+			answers[i] = answer{prs: prs, outcome: Outcome{Scope: scope, Err: err, Total: total}}
+		}()
+	}
+	wg.Wait()
+
+	res := Result{Outcomes: make([]Outcome, 0, len(scopes))}
 	seen := make(map[string]bool)
-	out := make([]PR, 0, len(owners)*8)
-
-	for _, owner := range owners {
-		vars := map[string]any{
-			"q":     fmt.Sprintf("is:pr is:open archived:false user:%s", owner),
-			"limit": searchLimit,
+	var errs []error
+	for _, a := range answers {
+		res.Outcomes = append(res.Outcomes, a.outcome)
+		if a.outcome.Err != nil {
+			errs = append(errs, a.outcome.Err)
+			continue
 		}
-		var resp searchResponse
-		if err := c.gql.DoWithContext(ctx, searchQuery, vars, &resp); err != nil {
-			return nil, fmt.Errorf("pull request search for %s failed: %w", owner, err)
-		}
-
-		for _, n := range resp.Search.Nodes {
-			pr, ok := n.toPR()
-			if !ok || seen[pr.Key()] {
-				continue
+		for _, pr := range a.prs {
+			if !seen[pr.Key()] {
+				seen[pr.Key()] = true
+				res.PRs = append(res.PRs, pr)
 			}
-			seen[pr.Key()] = true
-			out = append(out, pr)
 		}
 	}
+	if len(scopes) > 0 && len(errs) == len(scopes) {
+		return Result{}, errors.Join(errs...)
+	}
 
-	SortPRs(out)
-	return out, nil
+	SortPRs(res.PRs)
+	return res, nil
+}
+
+// search runs a single scope, returning its pull requests and how many
+// matched in total.
+func (c *Client) search(ctx context.Context, scope Scope) ([]PR, int, error) {
+	vars := map[string]any{"q": scope.query(), "limit": SearchLimit}
+	var resp searchResponse
+	if err := c.gql.DoWithContext(ctx, searchQuery, vars, &resp); err != nil {
+		return nil, 0, fmt.Errorf("pull request search for %s failed: %w", scope, err)
+	}
+	prs := make([]PR, 0, len(resp.Search.Nodes))
+	for _, n := range resp.Search.Nodes {
+		if pr, ok := n.toPR(); ok {
+			prs = append(prs, pr)
+		}
+	}
+	return prs, resp.Search.IssueCount, nil
 }
 
 // SortPRs orders pull requests most-recently-updated first, falling back to

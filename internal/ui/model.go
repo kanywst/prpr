@@ -22,8 +22,9 @@ import (
 type Fetcher interface {
 	// Viewer returns the authenticated login and the orgs it belongs to.
 	Viewer(ctx context.Context) (login string, orgs []string, err error)
-	// SearchOpenPRs returns every open PR under the given owners.
-	SearchOpenPRs(ctx context.Context, owners []string) ([]gh.PR, error)
+	// Search returns every open PR the scopes cover, and how each scope went.
+	// It errs only when no scope could be searched at all.
+	Search(ctx context.Context, scopes []gh.Scope) (gh.Result, error)
 	// State reports how a PR left the open list.
 	State(ctx context.Context, repo string, number int) (gh.State, error)
 }
@@ -85,8 +86,11 @@ type Model struct {
 	owners       []string
 	me           string
 
-	prs       []gh.PR
-	visible   []gh.PR
+	prs     []gh.PR
+	visible []gh.PR
+	// outcomes is how each scope of the last refresh went, for the status
+	// line's partial-failure and page-cap warnings.
+	outcomes  []gh.Outcome
 	farewells []farewell
 
 	cursor int
@@ -161,6 +165,15 @@ func New(cfg Config) Model {
 		filterKeys:   DefaultFilterKeyMap(s),
 		now:          time.Now(),
 	}
+}
+
+// scopes is what the next refresh searches.
+func (m Model) scopes() []gh.Scope {
+	out := make([]gh.Scope, 0, len(m.owners))
+	for _, o := range m.owners {
+		out = append(out, gh.OwnerScope(o))
+	}
+	return out
 }
 
 // selected returns the pull request under the cursor.

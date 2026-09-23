@@ -1,12 +1,15 @@
 package ui
 
 import (
+	"slices"
 	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/kanywst/prpr/internal/gh"
 )
 
 // maxFarewells caps the goodbye band so a batch merge cannot swallow the list.
@@ -15,12 +18,12 @@ const maxFarewells = 4
 // Init starts owner discovery, the animation ticker, and the background color
 // query that decides the palette.
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{
+	return tea.Batch(
 		tea.RequestBackgroundColor,
 		m.spinner.Tick,
 		tickCmd(),
-	}
-	return tea.Batch(append(cmds, m.refreshCmd())...)
+		m.refreshCmd(),
+	)
 }
 
 // Update handles a single message.
@@ -132,19 +135,34 @@ func (m Model) refreshDue() bool {
 
 // handlePRs installs a completed refresh and asks about anything that
 // disappeared since the previous one.
+//
+// A pull request missing from the refresh is not necessarily gone: a scope
+// that covers it may have failed, in which case it is carried over from the
+// previous list, or it may have been pushed past a scope's page cap, in which
+// case it only earns a farewell if it really did close.
 func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 	first := m.lastFetch.IsZero()
+	prs := slices.Clone(msg.res.PRs)
 
 	var cmds []tea.Cmd
 	if !first {
-		fresh := make(map[string]bool, len(msg.prs))
-		for _, pr := range msg.prs {
+		fresh := make(map[string]bool, len(prs))
+		for _, pr := range prs {
 			fresh[pr.Key()] = true
 		}
+		carried := false
 		for _, old := range m.prs {
-			if !fresh[old.Key()] {
-				cmds = append(cmds, m.stateCmd(old))
+			switch {
+			case fresh[old.Key()]:
+			case msg.res.Unsure(old):
+				prs = append(prs, old)
+				carried = true
+			default:
+				cmds = append(cmds, m.stateCmd(old, msg.res.Capped(old)))
 			}
+		}
+		if carried {
+			gh.SortPRs(prs)
 		}
 	}
 
@@ -152,7 +170,8 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 	m.ready = true
 	m.lastErr = nil
 	m.lastFetch = msg.at
-	m.prs = msg.prs
+	m.prs = prs
+	m.outcomes = msg.res.Outcomes
 	m.recompute()
 	m.applySize()
 
@@ -161,6 +180,9 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 
 // handleGone turns a vanished pull request into a goodbye banner.
 func (m Model) handleGone(msg goneMsg) (tea.Model, tea.Cmd) {
+	if msg.capped && msg.state == gh.StateOpen {
+		return m, nil
+	}
 	m.farewells = append(m.farewells, farewell{pr: msg.pr, state: msg.state, born: m.now})
 	if len(m.farewells) > maxFarewells {
 		m.farewells = m.farewells[len(m.farewells)-maxFarewells:]

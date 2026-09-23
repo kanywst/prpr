@@ -23,7 +23,7 @@ type meMsg struct{ me string }
 
 // prsMsg carries a completed refresh.
 type prsMsg struct {
-	prs []gh.PR
+	res gh.Result
 	at  time.Time
 }
 
@@ -36,6 +36,10 @@ type errMsg struct{ err error }
 type goneMsg struct {
 	pr    gh.PR
 	state gh.State
+	// capped is set when the pull request may only have been pushed past a
+	// search's page cap. If it turns out to be still open, nothing happened
+	// to it and there is nothing to wave at.
+	capped bool
 }
 
 // noticeMsg is a transient status line, used for things like "copied".
@@ -100,24 +104,24 @@ func (m Model) refreshCmd() tea.Cmd {
 
 // fetchCmd refreshes the open pull request list.
 func (m Model) fetchCmd() tea.Cmd {
-	fetcher, timeout, owners := m.fetcher, m.timeout, m.owners
-	if len(owners) == 0 {
+	fetcher, timeout, scopes := m.fetcher, m.timeout, m.scopes()
+	if len(scopes) == 0 {
 		return nil
 	}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
-		prs, err := fetcher.SearchOpenPRs(ctx, owners)
+		res, err := fetcher.Search(ctx, scopes)
 		if err != nil {
 			return errMsg{err}
 		}
-		return prsMsg{prs: prs, at: time.Now()}
+		return prsMsg{res: res, at: time.Now()}
 	}
 }
 
 // stateCmd looks up how a vanished pull request ended.
-func (m Model) stateCmd(pr gh.PR) tea.Cmd {
+func (m Model) stateCmd(pr gh.PR, capped bool) tea.Cmd {
 	fetcher, timeout := m.fetcher, m.timeout
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -127,9 +131,9 @@ func (m Model) stateCmd(pr gh.PR) tea.Cmd {
 		if err != nil {
 			// A disappearance we cannot explain is still worth waving at, and
 			// is not worth interrupting the user with an error.
-			return goneMsg{pr: pr, state: gh.StateOpen}
+			return goneMsg{pr: pr, state: gh.StateOpen, capped: capped}
 		}
-		return goneMsg{pr: pr, state: state}
+		return goneMsg{pr: pr, state: state, capped: capped}
 	}
 }
 

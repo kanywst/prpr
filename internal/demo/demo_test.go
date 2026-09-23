@@ -63,22 +63,22 @@ func TestMergeHappensOnCamera(t *testing.T) {
 	f := New()
 	ctx := context.Background()
 
-	before, err := f.SearchOpenPRs(ctx, nil)
+	before, err := f.Search(ctx, nil)
 	if err != nil {
 		t.Fatalf("first search: %v", err)
 	}
 
 	// Wind the clock forward rather than sleeping through the real delay.
 	f.started = time.Now().Add(-mergeAfter - time.Second)
-	after, err := f.SearchOpenPRs(ctx, nil)
+	after, err := f.Search(ctx, nil)
 	if err != nil {
 		t.Fatalf("second search: %v", err)
 	}
 
-	if len(after) != len(before)-1 {
-		t.Fatalf("after the merge window %d PRs remain, want %d", len(after), len(before)-1)
+	if len(after.PRs) != len(before.PRs)-1 {
+		t.Fatalf("after the merge window %d PRs remain, want %d", len(after.PRs), len(before.PRs)-1)
 	}
-	for _, pr := range after {
+	for _, pr := range after.PRs {
 		if pr.Key() == mergedKey {
 			t.Fatalf("%s should have been merged away", mergedKey)
 		}
@@ -97,7 +97,7 @@ func TestContextCancellationIsHonoured(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if _, err := New().SearchOpenPRs(ctx, nil); err == nil {
+	if _, err := New().Search(ctx, nil); err == nil {
 		t.Error("a canceled context should abort the simulated latency")
 	}
 }

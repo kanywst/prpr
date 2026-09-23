@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,13 +30,17 @@ func (f *fakeFetcher) Viewer(context.Context) (login string, orgs []string, err 
 	return f.me, f.orgs, nil
 }
 
-func (f *fakeFetcher) SearchOpenPRs(context.Context, []string) ([]gh.PR, error) {
+func (f *fakeFetcher) Search(_ context.Context, scopes []gh.Scope) (gh.Result, error) {
 	if f.err != nil {
-		return nil, f.err
+		return gh.Result{}, f.err
 	}
 	page := f.pages[min(f.calls, len(f.pages)-1)]
 	f.calls++
-	return page, nil
+	res := gh.Result{PRs: page}
+	for _, s := range scopes {
+		res.Outcomes = append(res.Outcomes, gh.Outcome{Scope: s})
+	}
+	return res, nil
 }
 
 func (f *fakeFetcher) State(_ context.Context, repo string, number int) (gh.State, error) {
@@ -189,7 +194,7 @@ func TestTabsPartitionByViewer(t *testing.T) {
 	f := &fakeFetcher{me: "kanywst", pages: [][]gh.PR{samplePRs(now)}}
 	m := testModel(t, f)
 	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
-	m, _ = step(t, m, prsMsg{prs: samplePRs(now), at: now})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: samplePRs(now)}, at: now})
 
 	counts := m.counts()
 	for _, tt := range []struct {
@@ -217,7 +222,7 @@ func TestFilterNarrowsAndKeepsSelection(t *testing.T) {
 	now := time.Now()
 	m := testModel(t, &fakeFetcher{me: "kanywst", pages: [][]gh.PR{samplePRs(now)}})
 	m, _ = step(t, m, ownersMsg{me: "kanywst"})
-	m, _ = step(t, m, prsMsg{prs: samplePRs(now), at: now})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: samplePRs(now)}, at: now})
 
 	m.cursor = 1 // #127
 	m.filter.SetValue("api")
@@ -252,14 +257,14 @@ func TestMergeDetectionProducesFarewell(t *testing.T) {
 	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst"}})
 
 	// First refresh: no farewells, because there is no previous list to diff.
-	m, cmd := step(t, m, prsMsg{prs: all, at: now})
+	m, cmd := step(t, m, prsMsg{res: gh.Result{PRs: all}, at: now})
 	if msgs := drain(cmd); len(msgs) != 0 {
 		t.Fatalf("first refresh emitted %v, want nothing", msgs)
 	}
 
 	// Second refresh with #127 gone: prpr asks GitHub how it ended.
 	remaining := []gh.PR{all[0], all[2]}
-	m, cmd = step(t, m, prsMsg{prs: remaining, at: now.Add(time.Minute)})
+	m, cmd = step(t, m, prsMsg{res: gh.Result{PRs: remaining}, at: now.Add(time.Minute)})
 
 	msgs := drain(cmd)
 	if len(msgs) != 1 {
@@ -345,7 +350,7 @@ func TestCursorStaysInsideTheList(t *testing.T) {
 	now := time.Now()
 	m := testModel(t, &fakeFetcher{me: "kanywst"})
 	m, _ = step(t, m, ownersMsg{me: "kanywst"})
-	m, _ = step(t, m, prsMsg{prs: samplePRs(now), at: now})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: samplePRs(now)}, at: now})
 
 	for range 10 {
 		m, _ = step(t, m, tea.KeyPressMsg{Code: 'j', Text: "j"})
@@ -374,7 +379,7 @@ func TestScrollingKeepsCursorVisible(t *testing.T) {
 
 	m := testModel(t, &fakeFetcher{me: "kanywst"})
 	m, _ = step(t, m, ownersMsg{me: "kanywst"})
-	m, _ = step(t, m, prsMsg{prs: many, at: now})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: many}, at: now})
 
 	rows := m.metrics().rows
 	m.cursor = len(many) - 1
@@ -392,7 +397,7 @@ func TestEscapeClearsTheFilterWithoutQuitting(t *testing.T) {
 	now := time.Now()
 	m := testModel(t, &fakeFetcher{me: "kanywst"})
 	m, _ = step(t, m, ownersMsg{me: "kanywst"})
-	m, _ = step(t, m, prsMsg{prs: samplePRs(now), at: now})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: samplePRs(now)}, at: now})
 
 	// Filter, accept it with enter, then press esc to clear: esc used to be a
 	// quit key, so this sequence killed the program instead.
@@ -429,7 +434,7 @@ func TestFilterModeRoundTrip(t *testing.T) {
 	now := time.Now()
 	m := testModel(t, &fakeFetcher{me: "kanywst"})
 	m, _ = step(t, m, ownersMsg{me: "kanywst"})
-	m, _ = step(t, m, prsMsg{prs: samplePRs(now), at: now})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: samplePRs(now)}, at: now})
 
 	m, _ = step(t, m, tea.KeyPressMsg{Code: '/', Text: "/"})
 	if m.mode != modeFilter {
@@ -458,5 +463,48 @@ func TestFilterModeRoundTrip(t *testing.T) {
 	}
 	if m.cursor2D() != nil {
 		t.Error("cursor2D() returned a cursor outside filter mode")
+	}
+}
+
+func TestFailedScopeCarriesItsPRsOver(t *testing.T) {
+	now := time.Now()
+	all := samplePRs(now)
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all}, at: now})
+
+	// 0-draft could not be searched this time; only kanywst/prpr#12 came back.
+	res := gh.Result{
+		PRs: []gh.PR{all[2]},
+		Outcomes: []gh.Outcome{
+			{Scope: gh.OwnerScope("kanywst"), Total: 1},
+			{Scope: gh.OwnerScope("0-draft"), Err: errors.New("SAML")},
+		},
+	}
+	m, cmd := step(t, m, prsMsg{res: res, at: now.Add(time.Minute)})
+
+	if msgs := drain(cmd); len(msgs) != 0 {
+		t.Errorf("a failed scope's PRs were treated as gone: %v", msgs)
+	}
+	if len(m.prs) != 3 {
+		t.Errorf("list has %d PRs, want all 3 kept", len(m.prs))
+	}
+	if !strings.Contains(m.warning(), "0-draft") {
+		t.Errorf("warning = %q, want it to name 0-draft", m.warning())
+	}
+}
+
+func TestCappedScopeDoesNotWaveAtOpenPRs(t *testing.T) {
+	m := testModel(t, &fakeFetcher{})
+	pr := gh.PR{Repo: "o/r", Number: 1}
+
+	m, _ = step(t, m, goneMsg{pr: pr, state: gh.StateOpen, capped: true})
+	if len(m.farewells) != 0 {
+		t.Error("a PR pushed past the page cap got a farewell")
+	}
+	// A capped PR that really merged still gets its moment.
+	m, _ = step(t, m, goneMsg{pr: pr, state: gh.StateMerged, capped: true})
+	if len(m.farewells) != 1 {
+		t.Error("a merged PR under a capped scope got no farewell")
 	}
 }
