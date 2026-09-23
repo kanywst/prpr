@@ -552,3 +552,12 @@ func TestDiscoveryHonorsExcludeOwners(t *testing.T) {
 		}
 	}
 }
+
+func TestNoScopesDoesNotSpinForever(t *testing.T) {
+	m := testModel(t, &fakeFetcher{})
+	// Every owner excluded, and the searches outside them turned off.
+	m, cmd := step(t, m, ownersMsg{me: "kanywst"})
+	if cmd != nil || m.loading || !m.ready {
+		t.Fatalf("with no scopes: cmd=%v loading=%v ready=%v, want a settled empty list", cmd != nil, m.loading, m.ready)
+	}
+}

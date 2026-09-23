@@ -62,8 +62,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.owners = msg.owners
 		}
 		m.recompute()
-		m.loading = true
-		return m, m.fetchCmd()
+		return m.startRefresh(m.fetchCmd())
 
 	case meMsg:
 		if msg.me != "" {
@@ -115,12 +114,26 @@ func (m Model) handleTick(now time.Time) (tea.Model, tea.Cmd) {
 		m.applySize()
 	}
 
-	cmds := []tea.Cmd{tickCmd()}
-	if m.refreshDue() {
-		m.loading = true
-		cmds = append(cmds, m.refreshCmd())
+	if !m.refreshDue() {
+		return m, tickCmd()
 	}
-	return m, tea.Batch(cmds...)
+	m, cmd := m.startRefresh(m.refreshCmd())
+	return m, tea.Batch(tickCmd(), cmd)
+}
+
+// startRefresh marks a refresh as in flight, unless there is nothing to run:
+// with every owner excluded and the authored and review-request searches off,
+// there are no scopes, and waiting on a fetch that never started would leave
+// the spinner going forever. That case settles as an empty, finished refresh.
+func (m Model) startRefresh(cmd tea.Cmd) (Model, tea.Cmd) {
+	if cmd == nil {
+		m.loading = false
+		m.ready = true
+		m.lastFetch = m.now
+		return m, nil
+	}
+	m.loading = true
+	return m, cmd
 }
 
 // refreshDue reports whether the automatic refresh should fire now.
@@ -298,8 +311,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Refresh):
 		if !m.loading {
-			m.loading = true
-			return m, m.refreshCmd()
+			return m.startRefresh(m.refreshCmd())
 		}
 
 	case key.Matches(msg, m.keys.Filter):
