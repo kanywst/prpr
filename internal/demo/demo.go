@@ -170,6 +170,16 @@ func fixtures(now time.Time) []gh.PR {
 			UpdatedAt: now.Add(-40 * 24 * time.Hour), CreatedAt: now.Add(-40 * 24 * time.Hour),
 			URL: "https://github.com/kanywst/scoop-bucket/pull/3",
 		},
+		{
+			// A contribution outside the watched owners, for the elsewhere tab.
+			Number: 214, Title: "fix: redraw after SIGWINCH while a prompt is open",
+			Repo: "tiny-lantern/lantern", Author: viewer,
+			Check: gh.CheckSuccess, Review: gh.ReviewApproved,
+			Additions: 23, Deletions: 4, ChangedFiles: 2, Comments: 5,
+			HeadRef: "fix/sigwinch-redraw", BaseRef: mainRef,
+			UpdatedAt: now.Add(-26 * time.Hour), CreatedAt: now.Add(-5 * 24 * time.Hour),
+			URL: "https://github.com/tiny-lantern/lantern/pull/214",
+		},
 	}
 
 	gh.SortPRs(prs)

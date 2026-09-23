@@ -40,8 +40,11 @@ func TestFixturesAreWellFormed(t *testing.T) {
 func TestFixturesCoverEveryTab(t *testing.T) {
 	prs := fixtures(time.Now())
 
-	var mine, review, draft int
+	var mine, review, elsewhere, draft int
 	for _, pr := range prs {
+		if o := pr.Owner(); o != viewer && o != "0-draft" {
+			elsewhere++
+		}
 		if pr.AuthoredBy("kanywst") {
 			mine++
 		}
@@ -54,8 +57,8 @@ func TestFixturesCoverEveryTab(t *testing.T) {
 	}
 	// Every tab has to have something in it, or the recording shows an empty
 	// pane the moment it switches tabs.
-	if mine == 0 || review == 0 || draft == 0 {
-		t.Errorf("tab coverage: mine=%d review=%d draft=%d, want all non-zero", mine, review, draft)
+	if mine == 0 || review == 0 || elsewhere == 0 || draft == 0 {
+		t.Errorf("tab coverage: mine=%d review=%d elsewhere=%d draft=%d, want all non-zero", mine, review, elsewhere, draft)
 	}
 }
 

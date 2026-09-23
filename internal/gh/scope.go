@@ -12,6 +12,13 @@ type ScopeKind int
 const (
 	// ScopeOwner is every open pull request in repositories an owner holds.
 	ScopeOwner ScopeKind = iota
+	// ScopeAuthor is every open pull request a user opened, wherever it is:
+	// contributions to other people's projects included.
+	ScopeAuthor
+	// ScopeReviewRequested is every open pull request that asks a user by
+	// name for a review, wherever it is. Requests made to a team are left
+	// out, matching what PR.AwaitsReviewFrom counts.
+	ScopeReviewRequested
 )
 
 // Scope is one search prpr runs on every refresh. A refresh is the union of
@@ -24,12 +31,37 @@ type Scope struct {
 // OwnerScope searches the repositories that owner holds.
 func OwnerScope(owner string) Scope { return Scope{Kind: ScopeOwner, Login: owner} }
 
-// String names the scope for the status line.
-func (s Scope) String() string { return s.Login }
+// AuthorScope searches the pull requests login opened.
+func AuthorScope(login string) Scope { return Scope{Kind: ScopeAuthor, Login: login} }
+
+// ReviewRequestedScope searches the pull requests awaiting login's review.
+func ReviewRequestedScope(login string) Scope {
+	return Scope{Kind: ScopeReviewRequested, Login: login}
+}
+
+// String names the scope for the status line, in search-qualifier form for
+// everything but plain owners.
+func (s Scope) String() string {
+	switch s.Kind {
+	case ScopeAuthor:
+		return "author:" + s.Login
+	case ScopeReviewRequested:
+		return "review-requested:" + s.Login
+	default:
+		return s.Login
+	}
+}
 
 // query is the search string for the scope.
 func (s Scope) query() string {
-	return fmt.Sprintf("is:pr is:open archived:false user:%s", s.Login)
+	qualifier := "user"
+	switch s.Kind {
+	case ScopeAuthor:
+		qualifier = "author"
+	case ScopeReviewRequested:
+		qualifier = "user-review-requested"
+	}
+	return fmt.Sprintf("is:pr is:open archived:false %s:%s", qualifier, s.Login)
 }
 
 // Covers reports whether pr is something this scope would have returned. The
@@ -37,7 +69,14 @@ func (s Scope) query() string {
 // pull request missing from a refresh has only really gone if every scope that
 // covers it came back complete.
 func (s Scope) Covers(pr PR) bool {
-	return strings.EqualFold(pr.Owner(), s.Login)
+	switch s.Kind {
+	case ScopeAuthor:
+		return pr.AuthoredBy(s.Login)
+	case ScopeReviewRequested:
+		return pr.AwaitsReviewFrom(s.Login)
+	default:
+		return strings.EqualFold(pr.Owner(), s.Login)
+	}
 }
 
 // Outcome is how a single scope's search went.

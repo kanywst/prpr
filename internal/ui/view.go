@@ -298,6 +298,8 @@ func (m Model) emptyMessage() string {
 		return m.s.EmptyMine
 	case tabReview:
 		return m.s.EmptyReview
+	case tabElsewhere:
+		return m.s.EmptyElsewhere
 	case tabDraft:
 		return m.s.EmptyDraft
 	default:

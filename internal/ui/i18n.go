@@ -34,10 +34,11 @@ func ParseLang(s string) (Lang, bool) {
 // flat struct rather than a map means a missing translation is a compile
 // error instead of an empty label at runtime.
 type Strings struct {
-	TabAll    string
-	TabMine   string
-	TabReview string
-	TabDraft  string
+	TabAll       string
+	TabMine      string
+	TabReview    string
+	TabElsewhere string
+	TabDraft     string
 
 	Collecting string
 	Failed     string
@@ -59,6 +60,7 @@ type Strings struct {
 	EmptyAll        string
 	EmptyMine       string
 	EmptyReview     string
+	EmptyElsewhere  string
 	EmptyDraft      string
 	EmptyFilter     string
 	ErrorHint       string // one %s: the error
@@ -129,10 +131,11 @@ func Catalog(l Lang) Strings {
 }
 
 var english = Strings{
-	TabAll:    "all",
-	TabMine:   "mine",
-	TabReview: "to review",
-	TabDraft:  "drafts",
+	TabAll:       "all",
+	TabMine:      "mine",
+	TabReview:    "to review",
+	TabElsewhere: "elsewhere",
+	TabDraft:     "drafts",
 
 	Collecting: " collecting…",
 	Failed:     "😿 failed",
@@ -154,6 +157,7 @@ var english = Strings{
 	EmptyAll:        "✨ no open pull requests — nice work ✨",
 	EmptyMine:       "✨ nothing of yours is open ✨",
 	EmptyReview:     "✨ your review queue is empty ✨",
+	EmptyElsewhere:  "✨ nothing open outside your owners ✨",
 	EmptyDraft:      "✨ no drafts ✨",
 	EmptyFilter:     "🔍 nothing matched\n\nesc clears the filter",
 	ErrorHint:       "😿 %s\n\nr to try again",
@@ -216,10 +220,11 @@ var english = Strings{
 }
 
 var japanese = Strings{
-	TabAll:    "すべて",
-	TabMine:   "自分の",
-	TabReview: "レビュー待ち",
-	TabDraft:  "下書き",
+	TabAll:       "すべて",
+	TabMine:      "自分の",
+	TabReview:    "レビュー待ち",
+	TabElsewhere: "外部",
+	TabDraft:     "下書き",
 
 	Collecting: " あつめてる…",
 	Failed:     "😿 しっぱい",
@@ -241,6 +246,7 @@ var japanese = Strings{
 	EmptyAll:        "✨ PR ないよ〜 おつかれさま ✨",
 	EmptyMine:       "✨ 自分の PR はないよ〜 ✨",
 	EmptyReview:     "✨ レビュー待ちゼロ! えらい ✨",
+	EmptyElsewhere:  "✨ 外部の PR はないよ ✨",
 	EmptyDraft:      "✨ 下書きはないよ ✨",
 	EmptyFilter:     "🔍 みつからなかった\n\nesc で絞り込み解除",
 	ErrorHint:       "😿 %s\n\nr でもう一回",

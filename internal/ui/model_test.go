@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -202,9 +203,10 @@ func TestTabsPartitionByViewer(t *testing.T) {
 		want int
 	}{
 		{tabAll, 3},
-		{tabMine, 2},   // #128 and #12 are authored by kanywst
-		{tabReview, 1}, // #127 requests a review from kanywst
-		{tabDraft, 1},  // #12 is a draft
+		{tabMine, 2},      // #128 and #12 are authored by kanywst
+		{tabReview, 1},    // #127 requests a review from kanywst
+		{tabElsewhere, 0}, // every sample lives under a watched owner
+		{tabDraft, 1},     // #12 is a draft
 	} {
 		if got := counts[tt.tab]; got != tt.want {
 			t.Errorf("counts[%v] = %d, want %d", tt.tab, got, tt.want)
@@ -506,5 +508,31 @@ func TestCappedScopeDoesNotWaveAtOpenPRs(t *testing.T) {
 	m, _ = step(t, m, goneMsg{pr: pr, state: gh.StateMerged, capped: true})
 	if len(m.farewells) != 1 {
 		t.Error("a merged PR under a capped scope got no farewell")
+	}
+}
+
+func TestElsewhereTabAndScopes(t *testing.T) {
+	now := time.Now()
+	m := New(Config{
+		Fetcher: &fakeFetcher{}, Interval: time.Minute, Timeout: time.Second,
+		Authored: true, ReviewRequests: true,
+	})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+
+	var kinds []gh.ScopeKind
+	for _, s := range m.scopes() {
+		kinds = append(kinds, s.Kind)
+	}
+	want := []gh.ScopeKind{gh.ScopeOwner, gh.ScopeOwner, gh.ScopeAuthor, gh.ScopeReviewRequested}
+	if !slices.Equal(kinds, want) {
+		t.Errorf("scopes = %v, want %v", kinds, want)
+	}
+
+	outside := gh.PR{Repo: "Someone/lib", Number: 4, Author: "kanywst", UpdatedAt: now}
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: append(samplePRs(now), outside)}, at: now})
+	m.tab = tabElsewhere
+	m.recompute()
+	if len(m.visible) != 1 || m.visible[0].Key() != outside.Key() {
+		t.Errorf("elsewhere tab = %v, want just %s", m.visible, outside.Key())
 	}
 }

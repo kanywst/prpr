@@ -1,6 +1,10 @@
 package ui
 
-import "github.com/kanywst/prpr/internal/gh"
+import (
+	"strings"
+
+	"github.com/kanywst/prpr/internal/gh"
+)
 
 // tabID is one of the list's saved views. The zero value is the "everything"
 // tab, so a fresh Model starts on it without extra initialization.
@@ -10,11 +14,29 @@ const (
 	tabAll tabID = iota
 	tabMine
 	tabReview
+	tabElsewhere
 	tabDraft
 )
 
 // allTabs is the tab bar's order.
-var allTabs = []tabID{tabAll, tabMine, tabReview, tabDraft}
+var allTabs = []tabID{tabAll, tabMine, tabReview, tabElsewhere, tabDraft}
+
+// viewer is who is looking at the list: what the identity-based tabs need to
+// sort a pull request into place.
+type viewer struct {
+	me     string
+	owners []string
+}
+
+// watches reports whether owner is one of the watched owners.
+func (v viewer) watches(owner string) bool {
+	for _, o := range v.owners {
+		if strings.EqualFold(o, owner) {
+			return true
+		}
+	}
+	return false
+}
 
 // label returns the tab's display name in the active language.
 func (t tabID) label(s Strings) string {
@@ -25,6 +47,8 @@ func (t tabID) label(s Strings) string {
 		return s.TabMine
 	case tabReview:
 		return s.TabReview
+	case tabElsewhere:
+		return s.TabElsewhere
 	case tabDraft:
 		return s.TabDraft
 	default:
@@ -32,17 +56,22 @@ func (t tabID) label(s Strings) string {
 	}
 }
 
-// keep reports whether a pull request belongs in this tab. me is the viewer's
-// login; when it is unknown the identity-based tabs simply stay empty rather
-// than guessing.
-func (t tabID) keep(pr gh.PR, me string) bool {
+// keep reports whether a pull request belongs in this tab. When the viewer's
+// login is unknown the identity-based tabs simply stay empty rather than
+// guessing.
+func (t tabID) keep(pr gh.PR, v viewer) bool {
 	switch t {
 	case tabAll:
 		return true
 	case tabMine:
-		return pr.AuthoredBy(me)
+		return pr.AuthoredBy(v.me)
 	case tabReview:
-		return pr.AwaitsReviewFrom(me)
+		return pr.AwaitsReviewFrom(v.me)
+	case tabElsewhere:
+		// Only the authored and review-request searches reach outside the
+		// watched owners, so this is your contributions to, and review
+		// requests from, everyone else.
+		return !v.watches(pr.Owner())
 	case tabDraft:
 		return pr.IsDraft
 	default:

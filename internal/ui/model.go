@@ -43,6 +43,12 @@ type Config struct {
 	Timeout time.Duration
 	// Lang selects the interface language. The zero value is English.
 	Lang Lang
+	// Authored adds every open PR the viewer opened, wherever it lives, on
+	// top of the watched owners.
+	Authored bool
+	// ReviewRequests adds every open PR that asks the viewer for a review,
+	// wherever it lives, on top of the watched owners.
+	ReviewRequests bool
 }
 
 // Tunables that are deliberately not exposed as flags: they are timings the
@@ -79,6 +85,9 @@ type Model struct {
 	fetcher  Fetcher
 	interval time.Duration
 	timeout  time.Duration
+
+	authored       bool
+	reviewRequests bool
 
 	// pinnedOwners is non-empty when the user passed --owner, in which case
 	// owner discovery is skipped entirely.
@@ -148,33 +157,46 @@ func New(cfg Config) Model {
 	vp.MouseWheelEnabled = true
 
 	return Model{
-		fetcher:      cfg.Fetcher,
-		interval:     cfg.Interval,
-		timeout:      cfg.Timeout,
-		pinnedOwners: cfg.Owners,
-		owners:       cfg.Owners,
-		focused:      true,
-		loading:      true,
-		theme:        NewTheme(true),
-		s:            s,
-		spinner:      sp,
-		filter:       fi,
-		help:         h,
-		detail:       vp,
-		keys:         DefaultKeyMap(s),
-		filterKeys:   DefaultFilterKeyMap(s),
-		now:          time.Now(),
+		fetcher:        cfg.Fetcher,
+		interval:       cfg.Interval,
+		timeout:        cfg.Timeout,
+		authored:       cfg.Authored,
+		reviewRequests: cfg.ReviewRequests,
+		pinnedOwners:   cfg.Owners,
+		owners:         cfg.Owners,
+		focused:        true,
+		loading:        true,
+		theme:          NewTheme(true),
+		s:              s,
+		spinner:        sp,
+		filter:         fi,
+		help:           h,
+		detail:         vp,
+		keys:           DefaultKeyMap(s),
+		filterKeys:     DefaultFilterKeyMap(s),
+		now:            time.Now(),
 	}
 }
 
-// scopes is what the next refresh searches.
+// scopes is what the next refresh searches: the watched owners, plus the
+// viewer's own pull requests and review requests from anywhere else once the
+// viewer's login is known.
 func (m Model) scopes() []gh.Scope {
-	out := make([]gh.Scope, 0, len(m.owners))
+	out := make([]gh.Scope, 0, len(m.owners)+2)
 	for _, o := range m.owners {
 		out = append(out, gh.OwnerScope(o))
 	}
+	if m.me != "" && m.authored {
+		out = append(out, gh.AuthorScope(m.me))
+	}
+	if m.me != "" && m.reviewRequests {
+		out = append(out, gh.ReviewRequestedScope(m.me))
+	}
 	return out
 }
+
+// viewer is who the tabs sort pull requests for.
+func (m Model) viewer() viewer { return viewer{me: m.me, owners: m.owners} }
 
 // selected returns the pull request under the cursor.
 func (m Model) selected() (gh.PR, bool) {
@@ -193,7 +215,7 @@ func (m Model) counts() map[tabID]int {
 			continue
 		}
 		for _, t := range allTabs {
-			if t.keep(pr, m.me) {
+			if t.keep(pr, m.viewer()) {
 				out[t]++
 			}
 		}
@@ -211,7 +233,7 @@ func (m *Model) recompute() {
 
 	m.visible = m.visible[:0]
 	for _, pr := range m.prs {
-		if m.tab.keep(pr, m.me) && matchesFilter(pr, m.filter.Value()) {
+		if m.tab.keep(pr, m.viewer()) && matchesFilter(pr, m.filter.Value()) {
 			m.visible = append(m.visible, pr)
 		}
 	}

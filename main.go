@@ -92,6 +92,9 @@ func run(args []string) error {
 		Interval: *interval,
 		Timeout:  *timeout,
 		Lang:     parsed,
+
+		Authored:       true,
+		ReviewRequests: true,
 	})
 
 	if _, err := tea.NewProgram(model).Run(); err != nil {
