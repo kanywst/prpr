@@ -6,15 +6,17 @@
 
 **prpr** puts every open GitHub pull request you can see on one screen. Press enter to open one in the browser, and watch it wave goodbye with a 🎉 when it gets merged.
 
-There is nothing to configure. prpr asks GitHub who you are and watches **your own account plus every org you belong to**, so it shows the right pull requests for whoever runs it.
+There is nothing to configure. prpr asks GitHub who you are and watches **your own account plus every org you belong to**, along with the pull requests you opened and the reviews you were asked for anywhere else. A [config file](#config-file) is there when you want to change that.
 
 ![prpr walking through a list of pull requests, opening the detail pane, filtering, switching tabs, and showing a merge banner](docs/demo.gif)
 
 ## What it does
 
 - **Finds its own owners.** Asks GitHub for your login and your orgs at startup, then lists every open pull request under them.
+- **Reaches outside them too.** Your pull requests to other people's projects, and review requests from orgs you are not in, are searched as well.
 - **Notices merges.** When a pull request leaves the list, prpr looks up how it ended and shows a farewell banner for a few seconds before it fades.
-- **Four tabs.** Everything, yours, awaiting your review, and drafts, each with a live count.
+- **Five tabs.** Everything, yours, awaiting your review, elsewhere (outside the watched owners), and drafts, each with a live count.
+- **Keeps going when an org does not answer.** An org that refuses the search (SAML SSO the token is not authorized for, say) is named in the header, and the rest of the list stays up. When an owner has more open pull requests than one search returns, the header says so too.
 - **Filtering.** `/` searches titles, repositories, authors, `#number` and labels at once. Space-separated terms are ANDed.
 - **Detail pane.** `d` shows the branch, the diff stat, reviewers and the body. Side by side at 100 columns or wider, full width when narrower.
 - **Auto refresh.** Every 60 seconds by default, with a countdown in the header.
@@ -61,6 +63,7 @@ prpr
 | `--interval` | `1m` | Auto-refresh interval (minimum `5s`) |
 | `--timeout` | `20s` | Timeout for a single refresh |
 | `--lang` | `en` | Interface language: `en` or `ja` |
+| `--config` | see below | Config file to read |
 | `--demo` | off | Run against a fixed fixture list instead of GitHub |
 | `--version` | | Print the version and exit |
 
@@ -75,6 +78,26 @@ prpr --interval 30s
 
 # Japanese interface
 prpr --lang ja
+```
+
+### Config file
+
+prpr reads `$XDG_CONFIG_HOME/prpr/config.yaml`, or `~/.config/prpr/config.yaml` when `XDG_CONFIG_HOME` is unset, on every platform. The file is optional, every key in it is optional, and a flag given on the command line wins over it. An unknown key is an error, so a typo does not silently do nothing.
+
+```yaml
+# pin the owners instead of discovering them
+owners: [0-draft, kanywst]
+
+# or keep discovery, but drop orgs you do not want to see
+exclude_owners: [some-huge-org]
+
+interval: 30s
+timeout: 20s
+lang: ja
+
+# search your own PRs and your review requests outside the owners (both on by default)
+authored: true
+review_requests: true
 ```
 
 ### Keys
@@ -110,9 +133,10 @@ prpr --lang ja
 | --- | --- |
 | `internal/gh` | The domain type (`PR`) and the GitHub GraphQL adapter |
 | `internal/browser` | The one OS-dependent side effect |
+| `internal/config` | The optional YAML config file |
 | `internal/demo` | The fixture list behind `--demo` |
 | `internal/ui` | The Bubble Tea MVU loop, with pure helpers kept apart from state |
-| `main.go` | Flag parsing and wiring |
+| `main.go` | Flag parsing, config precedence and wiring |
 
 `ui.Fetcher` is declared at the point of use, so the whole model is drivable in tests without network access.
 

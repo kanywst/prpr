@@ -21,7 +21,7 @@ func loadedModel(t *testing.T, w, h int, prs []gh.PR) Model {
 	m.now = now
 	m, _ = step(t, m, tea.WindowSizeMsg{Width: w, Height: h})
 	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
-	m, _ = step(t, m, prsMsg{prs: prs, at: now})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: prs}, at: now})
 	return m
 }
 
@@ -74,7 +74,7 @@ func TestRenderJapaneseWhenAsked(t *testing.T) {
 	m.now = now
 	m, _ = step(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	m, _ = step(t, m, ownersMsg{me: "kanywst"})
-	m, _ = step(t, m, prsMsg{prs: samplePRs(now), at: now})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: samplePRs(now)}, at: now})
 
 	out := ansi.Strip(m.render())
 	for _, want := range []string{"すべて", "レビュー待ち", "下書き"} {

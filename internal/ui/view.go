@@ -131,7 +131,39 @@ func (m Model) statusView() string {
 		if left < 0 {
 			left = 0
 		}
-		return m.theme.Status.Render(fmt.Sprintf("⟳ %ds", int(left.Seconds())+1))
+		countdown := m.theme.Status.Render(fmt.Sprintf("⟳ %ds", int(left.Seconds())+1))
+		if warn := m.warning(); warn != "" {
+			return m.theme.StatusWarm.Render(truncate(warn, maxWarningWidth)) + "  " + countdown
+		}
+		return countdown
+	}
+}
+
+// maxWarningWidth keeps a long list of failed scopes from pushing the owner
+// list out of the header entirely.
+const maxWarningWidth = 36
+
+// warning describes what the last refresh could not see: scopes that failed,
+// or failing that, scopes that hit the page cap. Failures come first because
+// they hide whole owners, where a cap only hides the oldest pull requests.
+func (m Model) warning() string {
+	var failed []string
+	var capped *gh.Outcome
+	for i, o := range m.outcomes {
+		switch {
+		case o.Err != nil:
+			failed = append(failed, o.Scope.String())
+		case o.Truncated() && capped == nil:
+			capped = &m.outcomes[i]
+		}
+	}
+	switch {
+	case len(failed) > 0:
+		return fmt.Sprintf(m.s.WarnFailed, strings.Join(failed, ", "))
+	case capped != nil:
+		return fmt.Sprintf(m.s.WarnCapped, capped.Scope, gh.SearchLimit, capped.Total)
+	default:
+		return ""
 	}
 }
 
@@ -266,6 +298,8 @@ func (m Model) emptyMessage() string {
 		return m.s.EmptyMine
 	case tabReview:
 		return m.s.EmptyReview
+	case tabElsewhere:
+		return m.s.EmptyElsewhere
 	case tabDraft:
 		return m.s.EmptyDraft
 	default:

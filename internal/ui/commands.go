@@ -2,6 +2,8 @@ package ui
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -17,9 +19,13 @@ type ownersMsg struct {
 	owners []string
 }
 
+// meMsg carries the viewer's login for pinned owners. An empty login means the
+// lookup failed and is retried on the next refresh.
+type meMsg struct{ me string }
+
 // prsMsg carries a completed refresh.
 type prsMsg struct {
-	prs []gh.PR
+	res gh.Result
 	at  time.Time
 }
 
@@ -32,6 +38,10 @@ type errMsg struct{ err error }
 type goneMsg struct {
 	pr    gh.PR
 	state gh.State
+	// capped is set when the pull request may only have been pushed past a
+	// search's page cap. If it turns out to be still open, nothing happened
+	// to it and there is nothing to wave at.
+	capped bool
 }
 
 // noticeMsg is a transient status line, used for things like "copied".
@@ -49,7 +59,7 @@ func tickCmd() tea.Cmd {
 // discoverOwnersCmd resolves which owners to watch from the authenticated
 // user, so prpr needs no per-user configuration to be useful.
 func (m Model) discoverOwnersCmd() tea.Cmd {
-	fetcher, timeout := m.fetcher, m.timeout
+	fetcher, timeout, exclude := m.fetcher, m.timeout, m.excludeOwners
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
@@ -58,46 +68,70 @@ func (m Model) discoverOwnersCmd() tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-		return ownersMsg{me: me, owners: append([]string{me}, orgs...)}
+		owners := make([]string, 0, len(orgs)+1)
+		for _, o := range append([]string{me}, orgs...) {
+			if !slices.ContainsFunc(exclude, func(x string) bool { return strings.EqualFold(x, o) }) {
+				owners = append(owners, o)
+			}
+		}
+		return ownersMsg{me: me, owners: owners}
 	}
 }
 
 // viewerCmd resolves just the viewer's login. It is used when --owner pinned
 // the owner list but the identity-based tabs still need to know who "me" is.
+// It runs alongside the first fetch rather than gating it: the pinned owners
+// are all a fetch needs, and a failed lookup here is retried on the next
+// refresh instead of holding the list hostage.
 func (m Model) viewerCmd() tea.Cmd {
-	fetcher, timeout, owners := m.fetcher, m.timeout, m.pinnedOwners
+	fetcher, timeout := m.fetcher, m.timeout
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
 		me, _, err := fetcher.Viewer(ctx)
 		if err != nil {
-			return errMsg{err}
+			return meMsg{}
 		}
-		return ownersMsg{me: me, owners: owners}
+		return meMsg{me: me}
 	}
+}
+
+// refreshCmd does whatever the next refresh needs. Owner discovery is retried
+// here too, so a start-up that could not reach GitHub recovers on its own
+// instead of sitting on an error until the program is restarted.
+func (m Model) refreshCmd() tea.Cmd {
+	// Discovery can legitimately leave no owners, when exclude_owners drops
+	// them all; knowing the login is what says it has run.
+	if len(m.owners) == 0 && m.me == "" {
+		return m.discoverOwnersCmd()
+	}
+	if m.me == "" {
+		return tea.Batch(m.viewerCmd(), m.fetchCmd())
+	}
+	return m.fetchCmd()
 }
 
 // fetchCmd refreshes the open pull request list.
 func (m Model) fetchCmd() tea.Cmd {
-	fetcher, timeout, owners := m.fetcher, m.timeout, m.owners
-	if len(owners) == 0 {
+	fetcher, timeout, scopes := m.fetcher, m.timeout, m.scopes()
+	if len(scopes) == 0 {
 		return nil
 	}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
-		prs, err := fetcher.SearchOpenPRs(ctx, owners)
+		res, err := fetcher.Search(ctx, scopes)
 		if err != nil {
 			return errMsg{err}
 		}
-		return prsMsg{prs: prs, at: time.Now()}
+		return prsMsg{res: res, at: time.Now()}
 	}
 }
 
 // stateCmd looks up how a vanished pull request ended.
-func (m Model) stateCmd(pr gh.PR) tea.Cmd {
+func (m Model) stateCmd(pr gh.PR, capped bool) tea.Cmd {
 	fetcher, timeout := m.fetcher, m.timeout
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -106,10 +140,12 @@ func (m Model) stateCmd(pr gh.PR) tea.Cmd {
 		state, err := fetcher.State(ctx, pr.Repo, pr.Number)
 		if err != nil {
 			// A disappearance we cannot explain is still worth waving at, and
-			// is not worth interrupting the user with an error.
+			// is not worth interrupting the user with an error. It is not
+			// marked capped: that suppression is for a PR confirmed still
+			// open, and this one's state is unknown.
 			return goneMsg{pr: pr, state: gh.StateOpen}
 		}
-		return goneMsg{pr: pr, state: state}
+		return goneMsg{pr: pr, state: state, capped: capped}
 	}
 }
 

@@ -46,25 +46,29 @@ func (f *Fetcher) Viewer(ctx context.Context) (login string, orgs []string, err 
 	return viewer, []string{"0-draft"}, nil
 }
 
-// SearchOpenPRs returns the fixture list, dropping one pull request once the
+// Search returns the fixture list, dropping one pull request once the
 // recording has been running long enough for the merge to land on camera.
-func (f *Fetcher) SearchOpenPRs(ctx context.Context, _ []string) ([]gh.PR, error) {
+func (f *Fetcher) Search(ctx context.Context, scopes []gh.Scope) (gh.Result, error) {
 	if err := sleep(ctx, latency); err != nil {
-		return nil, err
+		return gh.Result{}, err
 	}
 
 	all := fixtures(time.Now())
+	res := gh.Result{PRs: all, Outcomes: make([]gh.Outcome, 0, len(scopes))}
+	for _, s := range scopes {
+		res.Outcomes = append(res.Outcomes, gh.Outcome{Scope: s})
+	}
 	if time.Since(f.started) < mergeAfter {
-		return all, nil
+		return res, nil
 	}
 
-	out := make([]gh.PR, 0, len(all))
+	res.PRs = make([]gh.PR, 0, len(all))
 	for _, pr := range all {
 		if pr.Key() != mergedKey {
-			out = append(out, pr)
+			res.PRs = append(res.PRs, pr)
 		}
 	}
-	return out, nil
+	return res, nil
 }
 
 // State reports every vanished pull request as merged, which is the outcome
@@ -165,6 +169,16 @@ func fixtures(now time.Time) []gh.PR {
 			HeadRef: "ci/windows-arm64", BaseRef: mainRef,
 			UpdatedAt: now.Add(-40 * 24 * time.Hour), CreatedAt: now.Add(-40 * 24 * time.Hour),
 			URL: "https://github.com/kanywst/scoop-bucket/pull/3",
+		},
+		{
+			// A contribution outside the watched owners, for the elsewhere tab.
+			Number: 214, Title: "fix: redraw after SIGWINCH while a prompt is open",
+			Repo: "tiny-lantern/lantern", Author: viewer,
+			Check: gh.CheckSuccess, Review: gh.ReviewApproved,
+			Additions: 23, Deletions: 4, ChangedFiles: 2, Comments: 5,
+			HeadRef: "fix/sigwinch-redraw", BaseRef: mainRef,
+			UpdatedAt: now.Add(-26 * time.Hour), CreatedAt: now.Add(-5 * 24 * time.Hour),
+			URL: "https://github.com/tiny-lantern/lantern/pull/214",
 		},
 	}
 

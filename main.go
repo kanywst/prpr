@@ -10,10 +10,10 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/kanywst/prpr/internal/config"
 	"github.com/kanywst/prpr/internal/demo"
 	"github.com/kanywst/prpr/internal/gh"
 	"github.com/kanywst/prpr/internal/ui"
@@ -53,13 +53,16 @@ func run(args []string) error {
 		fmt.Fprint(fs.Output(),
 			"prpr — a TUI for the open GitHub pull requests you can see\n\nusage: prpr [options]\n\n")
 		fs.PrintDefaults()
+		fmt.Fprint(fs.Output(), "\nevery option but --config, --demo and --version can also be set in the config file;\nflags win over the file.\n")
 	}
 
+	def := config.Default()
 	var owners ownerList
 	fs.Var(&owners, "owner", "owner to watch; repeatable and comma-separated.\ndefaults to the logged-in user and every org they belong to")
-	interval := fs.Duration("interval", time.Minute, "auto-refresh interval")
-	timeout := fs.Duration("timeout", 20*time.Second, "timeout for a single refresh")
-	lang := fs.String("lang", string(ui.LangEN), "interface language: en or ja")
+	interval := fs.Duration("interval", def.Interval, "auto-refresh interval")
+	timeout := fs.Duration("timeout", def.Timeout, "timeout for a single refresh")
+	lang := fs.String("lang", def.Lang, "interface language: en or ja")
+	configPath := fs.String("config", "", "config file (default $XDG_CONFIG_HOME/prpr/config.yaml, or ~/.config/prpr/config.yaml)")
 	demoMode := fs.Bool("demo", false, "run against a canned pull request list, for screenshots and recordings")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 
@@ -70,15 +73,31 @@ func run(args []string) error {
 		fmt.Println("prpr", buildVersion())
 		return nil
 	}
-	if *interval < 5*time.Second {
-		return fmt.Errorf("--interval must be at least 5s (got %s)", *interval)
+
+	cfg, err := loadConfig(*configPath)
+	if err != nil {
+		return err
 	}
-	if *timeout <= 0 {
-		return errors.New("--timeout must be positive")
+	// Only flags given on the command line override the file; their defaults
+	// must not silently undo a setting someone wrote down.
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "owner":
+			cfg.Owners = owners
+		case "interval":
+			cfg.Interval = *interval
+		case "timeout":
+			cfg.Timeout = *timeout
+		case "lang":
+			cfg.Lang = *lang
+		}
+	})
+	if err := cfg.Validate(); err != nil {
+		return err
 	}
-	parsed, ok := ui.ParseLang(*lang)
+	parsed, ok := ui.ParseLang(cfg.Lang)
 	if !ok {
-		return fmt.Errorf("--lang must be en or ja (got %q)", *lang)
+		return fmt.Errorf("lang must be en or ja (got %q)", cfg.Lang)
 	}
 
 	fetcher, err := newFetcher(*demoMode)
@@ -87,17 +106,33 @@ func run(args []string) error {
 	}
 
 	model := ui.New(ui.Config{
-		Fetcher:  fetcher,
-		Owners:   owners,
-		Interval: *interval,
-		Timeout:  *timeout,
-		Lang:     parsed,
+		Fetcher:        fetcher,
+		Owners:         cfg.Owners,
+		ExcludeOwners:  cfg.ExcludeOwners,
+		Interval:       cfg.Interval,
+		Timeout:        cfg.Timeout,
+		Lang:           parsed,
+		Authored:       cfg.Authored,
+		ReviewRequests: cfg.ReviewRequests,
 	})
 
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		return fmt.Errorf("the TUI stopped: %w", err)
 	}
 	return nil
+}
+
+// loadConfig reads the config file named by --config, or the default one when
+// it exists.
+func loadConfig(path string) (config.Config, error) {
+	if path != "" {
+		return config.Load(path, true)
+	}
+	path, err := config.Path()
+	if err != nil {
+		return config.Config{}, err
+	}
+	return config.Load(path, false)
 }
 
 // newFetcher picks the live GitHub client, or the fixture one behind --demo.

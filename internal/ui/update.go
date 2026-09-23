@@ -1,12 +1,15 @@
 package ui
 
 import (
+	"slices"
 	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/kanywst/prpr/internal/gh"
 )
 
 // maxFarewells caps the goodbye band so a batch merge cannot swallow the list.
@@ -15,17 +18,12 @@ const maxFarewells = 4
 // Init starts owner discovery, the animation ticker, and the background color
 // query that decides the palette.
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{
+	return tea.Batch(
 		tea.RequestBackgroundColor,
 		m.spinner.Tick,
 		tickCmd(),
-	}
-	if len(m.pinnedOwners) > 0 {
-		cmds = append(cmds, m.viewerCmd())
-	} else {
-		cmds = append(cmds, m.discoverOwnersCmd())
-	}
-	return tea.Batch(cmds...)
+		m.refreshCmd(),
+	)
 }
 
 // Update handles a single message.
@@ -64,8 +62,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.owners = msg.owners
 		}
 		m.recompute()
-		m.loading = true
-		return m, m.fetchCmd()
+		return m.startRefresh(m.fetchCmd())
+
+	case meMsg:
+		if msg.me != "" {
+			m.me = msg.me
+			m.recompute()
+		}
+		return m, nil
 
 	case prsMsg:
 		return m.handlePRs(msg)
@@ -110,18 +114,32 @@ func (m Model) handleTick(now time.Time) (tea.Model, tea.Cmd) {
 		m.applySize()
 	}
 
-	cmds := []tea.Cmd{tickCmd()}
-	if m.refreshDue() {
-		m.loading = true
-		cmds = append(cmds, m.fetchCmd())
+	if !m.refreshDue() {
+		return m, tickCmd()
 	}
-	return m, tea.Batch(cmds...)
+	m, cmd := m.startRefresh(m.refreshCmd())
+	return m, tea.Batch(tickCmd(), cmd)
+}
+
+// startRefresh marks a refresh as in flight, unless there is nothing to run:
+// with every owner excluded and the authored and review-request searches off,
+// there are no scopes, and waiting on a fetch that never started would leave
+// the spinner going forever. That case settles as an empty, finished refresh.
+func (m Model) startRefresh(cmd tea.Cmd) (Model, tea.Cmd) {
+	if cmd == nil {
+		m.loading = false
+		m.ready = true
+		m.lastFetch = m.now
+		return m, nil
+	}
+	m.loading = true
+	return m, cmd
 }
 
 // refreshDue reports whether the automatic refresh should fire now.
 func (m Model) refreshDue() bool {
 	switch {
-	case m.loading, !m.focused, len(m.owners) == 0, m.lastFetch.IsZero():
+	case m.loading, !m.focused, m.lastFetch.IsZero():
 		return false
 	default:
 		return m.nextFetchIn() <= 0
@@ -130,19 +148,36 @@ func (m Model) refreshDue() bool {
 
 // handlePRs installs a completed refresh and asks about anything that
 // disappeared since the previous one.
+//
+// A pull request missing from the refresh is not necessarily gone: a scope
+// that covers it may have failed, in which case it is carried over from the
+// previous list, or it may have been pushed past a scope's page cap, in which
+// case it only earns a farewell if it really did close. One held only by the
+// review-request search just means the review was done, and leaves quietly.
 func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 	first := m.lastFetch.IsZero()
+	prs := slices.Clone(msg.res.PRs)
 
 	var cmds []tea.Cmd
 	if !first {
-		fresh := make(map[string]bool, len(msg.prs))
-		for _, pr := range msg.prs {
+		fresh := make(map[string]bool, len(prs))
+		for _, pr := range prs {
 			fresh[pr.Key()] = true
 		}
+		carried := false
 		for _, old := range m.prs {
-			if !fresh[old.Key()] {
-				cmds = append(cmds, m.stateCmd(old))
+			switch {
+			case fresh[old.Key()]:
+			case msg.res.Unsure(old):
+				prs = append(prs, old)
+				carried = true
+			case msg.res.ReviewOnly(old) && !msg.res.Capped(old):
+			default:
+				cmds = append(cmds, m.stateCmd(old, msg.res.Capped(old)))
 			}
+		}
+		if carried {
+			gh.SortPRs(prs)
 		}
 	}
 
@@ -150,7 +185,8 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 	m.ready = true
 	m.lastErr = nil
 	m.lastFetch = msg.at
-	m.prs = msg.prs
+	m.prs = prs
+	m.outcomes = msg.res.Outcomes
 	m.recompute()
 	m.applySize()
 
@@ -159,6 +195,9 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 
 // handleGone turns a vanished pull request into a goodbye banner.
 func (m Model) handleGone(msg goneMsg) (tea.Model, tea.Cmd) {
+	if msg.capped && msg.state == gh.StateOpen {
+		return m, nil
+	}
 	m.farewells = append(m.farewells, farewell{pr: msg.pr, state: msg.state, born: m.now})
 	if len(m.farewells) > maxFarewells {
 		m.farewells = m.farewells[len(m.farewells)-maxFarewells:]
@@ -273,9 +312,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.detail.HalfPageDown()
 
 	case key.Matches(msg, m.keys.Refresh):
-		if !m.loading && len(m.owners) > 0 {
-			m.loading = true
-			return m, m.fetchCmd()
+		if !m.loading {
+			return m.startRefresh(m.refreshCmd())
 		}
 
 	case key.Matches(msg, m.keys.Filter):
