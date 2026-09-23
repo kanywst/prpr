@@ -561,3 +561,21 @@ func TestNoScopesDoesNotSpinForever(t *testing.T) {
 		t.Fatalf("with no scopes: cmd=%v loading=%v ready=%v, want a settled empty list", cmd != nil, m.loading, m.ready)
 	}
 }
+
+func TestSubmittedOutsideReviewLeavesQuietly(t *testing.T) {
+	now := time.Now()
+	m := testModel(t, &fakeFetcher{})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst"}})
+
+	outside := gh.PR{Repo: "someone/lib", Number: 7, Author: "alice", Reviewers: []string{"kanywst"}, UpdatedAt: now}
+	outcomes := []gh.Outcome{{Scope: gh.OwnerScope("kanywst")}, {Scope: gh.ReviewRequestedScope("kanywst")}}
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: []gh.PR{outside}, Outcomes: outcomes}, at: now})
+
+	m, cmd := step(t, m, prsMsg{res: gh.Result{Outcomes: outcomes}, at: now.Add(time.Minute)})
+	if msgs := drain(cmd); len(msgs) != 0 {
+		t.Errorf("a reviewed outside PR was looked up for a farewell: %v", msgs)
+	}
+	if len(m.prs) != 0 {
+		t.Errorf("list = %v, want it gone", m.prs)
+	}
+}

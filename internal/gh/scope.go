@@ -112,6 +112,23 @@ func (r Result) Unsure(pr PR) bool {
 	return false
 }
 
+// ReviewOnly reports whether the review-request search was the only thing
+// holding pr in the list. Such a pull request drops out as soon as the review
+// is submitted, which says nothing about the pull request itself.
+func (r Result) ReviewOnly(pr PR) bool {
+	review := false
+	for _, o := range r.Outcomes {
+		if !o.Scope.Covers(pr) {
+			continue
+		}
+		if o.Scope.Kind != ScopeReviewRequested {
+			return false
+		}
+		review = true
+	}
+	return review
+}
+
 // Capped reports whether pr may simply have been pushed past the page cap of
 // a scope that covers it, rather than having left the open list.
 func (r Result) Capped(pr PR) bool {

@@ -109,3 +109,22 @@ func TestSearchReportsThePageCap(t *testing.T) {
 		t.Error("a PR under a capped scope was not marked capped")
 	}
 }
+
+func TestReviewOnly(t *testing.T) {
+	res := Result{Outcomes: []Outcome{
+		{Scope: OwnerScope("kanywst")},
+		{Scope: AuthorScope("kanywst")},
+		{Scope: ReviewRequestedScope("kanywst")},
+	}}
+	outside := PR{Repo: "someone/lib", Number: 1, Author: "alice", Reviewers: []string{"kanywst"}}
+	if !res.ReviewOnly(outside) {
+		t.Error("an outside PR held only by the review request was not review-only")
+	}
+	owned := PR{Repo: "kanywst/prpr", Number: 2, Author: "alice", Reviewers: []string{"kanywst"}}
+	if res.ReviewOnly(owned) {
+		t.Error("a PR under a watched owner was treated as review-only")
+	}
+	if res.ReviewOnly(PR{Repo: "someone/lib", Number: 3, Author: "alice"}) {
+		t.Error("a PR no scope covers was treated as review-only")
+	}
+}

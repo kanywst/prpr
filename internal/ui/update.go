@@ -152,7 +152,8 @@ func (m Model) refreshDue() bool {
 // A pull request missing from the refresh is not necessarily gone: a scope
 // that covers it may have failed, in which case it is carried over from the
 // previous list, or it may have been pushed past a scope's page cap, in which
-// case it only earns a farewell if it really did close.
+// case it only earns a farewell if it really did close. One held only by the
+// review-request search just means the review was done, and leaves quietly.
 func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 	first := m.lastFetch.IsZero()
 	prs := slices.Clone(msg.res.PRs)
@@ -170,6 +171,7 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 			case msg.res.Unsure(old):
 				prs = append(prs, old)
 				carried = true
+			case msg.res.ReviewOnly(old):
 			default:
 				cmds = append(cmds, m.stateCmd(old, msg.res.Capped(old)))
 			}
