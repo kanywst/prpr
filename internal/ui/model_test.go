@@ -519,8 +519,9 @@ func TestElsewhereTabAndScopes(t *testing.T) {
 	})
 	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
 
-	var kinds []gh.ScopeKind
-	for _, s := range m.scopes() {
+	scopes := m.scopes()
+	kinds := make([]gh.ScopeKind, 0, len(scopes))
+	for _, s := range scopes {
 		kinds = append(kinds, s.Kind)
 	}
 	want := []gh.ScopeKind{gh.ScopeOwner, gh.ScopeOwner, gh.ScopeAuthor, gh.ScopeReviewRequested}
