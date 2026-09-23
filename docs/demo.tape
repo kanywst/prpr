@@ -62,6 +62,7 @@ Sleep 800ms
 Tab Sleep 1200ms
 Tab Sleep 1200ms
 Tab Sleep 1200ms
+Tab Sleep 1200ms
 Tab Sleep 1s
 
 # Wait for the refresh that finds #127 merged, and let the banner be read.
