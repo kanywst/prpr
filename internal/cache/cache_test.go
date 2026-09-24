@@ -3,6 +3,7 @@ package cache
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -32,6 +33,11 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 		t.Errorf("PRs = %+v", out.PRs)
 	}
 
+	// Windows has no Unix permission bits to check; the file sits in the
+	// user's own profile there.
+	if runtime.GOOS == "windows" {
+		return
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
