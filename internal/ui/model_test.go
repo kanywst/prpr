@@ -862,7 +862,8 @@ func TestDropUncoveredLeavesASavedListAlone(t *testing.T) {
 	}
 	if len(m.prs) != 1 {
 		t.Errorf("prs = %d, want only the kanywst PR", len(m.prs))
-||||||| parent of eeb0753 (feat: list open issues alongside pull requests behind --issues)
+	}
+}
 
 func TestIssuesJoinTheListWhenAskedFor(t *testing.T) {
 	now := time.Now()
