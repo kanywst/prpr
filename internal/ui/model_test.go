@@ -864,3 +864,71 @@ func TestDropUncoveredLeavesASavedListAlone(t *testing.T) {
 		t.Errorf("prs = %d, want only the kanywst PR", len(m.prs))
 	}
 }
+
+func TestIssuesJoinTheListWhenAskedFor(t *testing.T) {
+	now := time.Now()
+	assigned := gh.PR{
+		Number: 140, Title: "limiter ignores Retry-After", Repo: "0-draft/api",
+		Author: "alice", IsIssue: true, Assignees: []string{"kanywst"}, UpdatedAt: now,
+	}
+	dashboard := gh.PR{
+		Number: 1, Title: "Dependency Dashboard", Repo: "0-draft/api",
+		Author: "renovate", IsBot: true, IsIssue: true, UpdatedAt: now,
+	}
+	prs := append(samplePRs(now), assigned, dashboard)
+
+	m := New(Config{Fetcher: &fakeFetcher{}, Interval: time.Minute, Timeout: time.Second, Issues: true, Authored: true})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: prs}, at: now})
+
+	var issueScopes int
+	for _, s := range m.scopes() {
+		if s.Issues {
+			issueScopes++
+		}
+	}
+	if issueScopes != 3 {
+		t.Errorf("issue scopes = %d, want one per PR scope (3)", issueScopes)
+	}
+
+	counts := m.counts()
+	for _, tt := range []struct {
+		tab  tabID
+		want int
+	}{
+		{tabAll, 4},    // the three PRs and the assigned issue
+		{tabReview, 2}, // #127's review request and the assigned issue
+		{tabIssues, 1}, // the bot's issue goes to the bots tab
+		{tabDraft, 1},
+		{tabBots, 1},
+	} {
+		if got := counts[tt.tab]; got != tt.want {
+			t.Errorf("counts[%v] = %d, want %d", tt.tab, got, tt.want)
+		}
+	}
+	if !slices.Contains(m.tabs(), tabIssues) || tabReview.label(m.s, true) != m.s.TabYourTurn {
+		t.Error("the tab bar does not show the issues tab and your-turn label")
+	}
+}
+
+func TestIssuesTabHiddenWhenIssuesAreOff(t *testing.T) {
+	m := testModel(t, &fakeFetcher{})
+	if slices.Contains(m.tabs(), tabIssues) {
+		t.Error("the issues tab shows with issues off")
+	}
+	for _, s := range m.scopes() {
+		if s.Issues {
+			t.Errorf("issue scope %v searched with issues off", s)
+		}
+	}
+	// Tab cycling skips the hidden tab, both ways.
+	seen := map[tabID]bool{}
+	tab := tabAll
+	for range len(allTabs) {
+		seen[tab] = true
+		tab = tab.step(m.tabs(), 1)
+	}
+	if seen[tabIssues] || tabAll.step(m.tabs(), -1) != tabBots {
+		t.Errorf("cycling visited %v", seen)
+	}
+}

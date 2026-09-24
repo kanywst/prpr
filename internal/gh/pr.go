@@ -43,7 +43,10 @@ const (
 	StateClosed State = "CLOSED"
 )
 
-// PR is one open pull request, as prpr cares about it.
+// PR is one open pull request, as prpr cares about it, or an open issue when
+// IsIssue is set. Issues ride in the same type because the list, the tabs and
+// the farewells treat both alike; the fields only a pull request has (draft,
+// diff, branches, checks, review) are simply left empty on an issue.
 type PR struct {
 	Number int
 	Title  string
@@ -54,6 +57,7 @@ type PR struct {
 	// IsBot is set when the author is a GitHub App (dependabot, renovate,
 	// github-actions and the like) rather than a person.
 	IsBot        bool
+	IsIssue      bool
 	IsDraft      bool
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
@@ -66,6 +70,7 @@ type PR struct {
 	Check        Check
 	Review       Review
 	Reviewers    []string
+	Assignees    []string
 	Labels       []string
 }
 
@@ -91,11 +96,26 @@ func (p PR) AuthoredBy(login string) bool {
 
 // AwaitsReviewFrom reports whether login has been asked to review.
 func (p PR) AwaitsReviewFrom(login string) bool {
+	return !p.IsIssue && containsLogin(p.Reviewers, login)
+}
+
+// AssignedTo reports whether an issue is assigned to login.
+func (p PR) AssignedTo(login string) bool {
+	return p.IsIssue && containsLogin(p.Assignees, login)
+}
+
+// WaitsOn reports whether the next move is login's: a review asked of them on
+// a pull request, or an issue assigned to them.
+func (p PR) WaitsOn(login string) bool {
+	return p.AwaitsReviewFrom(login) || p.AssignedTo(login)
+}
+
+func containsLogin(logins []string, login string) bool {
 	if login == "" {
 		return false
 	}
-	for _, r := range p.Reviewers {
-		if strings.EqualFold(r, login) {
+	for _, l := range logins {
+		if strings.EqualFold(l, login) {
 			return true
 		}
 	}

@@ -6,6 +6,7 @@ package demo
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/kanywst/prpr/internal/gh"
@@ -26,8 +27,13 @@ const (
 	viewer = "kanywst"
 	// mainRef is the base branch every fixture targets.
 	mainRef = "main"
-	// apiRepo is the busiest fixture repository.
-	apiRepo = "0-draft/api"
+	// apiRepo and prprRepo are the busiest fixture repositories.
+	apiRepo  = "0-draft/api"
+	prprRepo = "kanywst/prpr"
+	// alice is the busiest fixture teammate.
+	alice = "alice"
+	// enhancement is the most common fixture label.
+	enhancement = "enhancement"
 )
 
 // Fetcher implements the interface the UI consumes, from fixtures.
@@ -56,10 +62,17 @@ func (f *Fetcher) Search(ctx context.Context, scopes []gh.Scope) (gh.Result, err
 	}
 
 	all := fixtures(time.Now())
-	res := gh.Result{PRs: all, Outcomes: make([]gh.Outcome, 0, len(scopes))}
+	res := gh.Result{Outcomes: make([]gh.Outcome, 0, len(scopes))}
+	issues := false
 	for _, s := range scopes {
 		res.Outcomes = append(res.Outcomes, gh.Outcome{Scope: s})
+		issues = issues || s.Issues
 	}
+	// The issue fixtures only appear under --issues, as they would live.
+	if !issues {
+		all = slices.DeleteFunc(all, func(pr gh.PR) bool { return pr.IsIssue })
+	}
+	res.PRs = all
 	if time.Since(f.started) < mergeAfter {
 		return res, nil
 	}
@@ -102,7 +115,7 @@ func fixtures(now time.Time) []gh.PR {
 			Check: gh.CheckSuccess, Review: gh.ReviewApproved,
 			Additions: 142, Deletions: 9, ChangedFiles: 5, Comments: 3,
 			HeadRef: "feat/rate-limiter", BaseRef: mainRef,
-			Labels:    []string{"enhancement", "api"},
+			Labels:    []string{enhancement, "api"},
 			UpdatedAt: now.Add(-2 * time.Hour), CreatedAt: now.Add(-3 * 24 * time.Hour),
 			URL: "https://github.com/0-draft/api/pull/128",
 			Body: "Adds a token-bucket limiter in front of the public endpoints. " +
@@ -111,7 +124,7 @@ func fixtures(now time.Time) []gh.PR {
 		},
 		{
 			Number: 127, Title: "fix: nil deref when the request body is empty",
-			Repo: apiRepo, Author: "alice",
+			Repo: apiRepo, Author: alice,
 			Check: gh.CheckPending, Review: gh.ReviewRequired,
 			Reviewers: []string{viewer},
 			Additions: 8, Deletions: 2, ChangedFiles: 1, Comments: 1,
@@ -125,7 +138,7 @@ func fixtures(now time.Time) []gh.PR {
 			Number: 64, Title: "worker: retry the webhook delivery with jitter",
 			Repo: "0-draft/worker", Author: "bob",
 			Check: gh.CheckFailure, Review: gh.ReviewChanges,
-			Reviewers: []string{viewer, "alice"},
+			Reviewers: []string{viewer, alice},
 			Additions: 96, Deletions: 41, ChangedFiles: 7, Comments: 12,
 			HeadRef: "feat/retry-jitter", BaseRef: mainRef,
 			Labels:    []string{"reliability"},
@@ -144,7 +157,7 @@ func fixtures(now time.Time) []gh.PR {
 		},
 		{
 			Number: 12, Title: "docs: write the getting-started page",
-			Repo: "kanywst/prpr", Author: viewer,
+			Repo: prprRepo, Author: viewer,
 			Check: gh.CheckNone, IsDraft: true,
 			Additions: 31, ChangedFiles: 1,
 			HeadRef: "docs/getting-started", BaseRef: mainRef,
@@ -154,12 +167,12 @@ func fixtures(now time.Time) []gh.PR {
 		},
 		{
 			Number: 9, Title: "feat: remember the selected tab between runs",
-			Repo: "kanywst/prpr", Author: "carol",
+			Repo: prprRepo, Author: "carol",
 			Check: gh.CheckSuccess, Review: gh.ReviewRequired,
 			Reviewers: []string{viewer},
 			Additions: 58, Deletions: 6, ChangedFiles: 4, Comments: 2,
 			HeadRef: "feat/sticky-tab", BaseRef: mainRef,
-			Labels:    []string{"enhancement", "good first issue"},
+			Labels:    []string{enhancement, "good first issue"},
 			UpdatedAt: now.Add(-3 * 24 * time.Hour), CreatedAt: now.Add(-4 * 24 * time.Hour),
 			URL: "https://github.com/kanywst/prpr/pull/9",
 		},
@@ -182,6 +195,23 @@ func fixtures(now time.Time) []gh.PR {
 			Labels:    []string{"dependencies"},
 			UpdatedAt: now.Add(-9 * time.Hour), CreatedAt: now.Add(-9 * time.Hour),
 			URL: "https://github.com/0-draft/api/pull/131",
+		},
+		{
+			// An issue assigned to the viewer, for --issues.
+			Number: 140, Title: "rate limiter ignores the Retry-After header",
+			Repo: apiRepo, Author: alice, IsIssue: true,
+			Assignees: []string{viewer}, Comments: 4,
+			Labels:    []string{"bug"},
+			UpdatedAt: now.Add(-4 * time.Hour), CreatedAt: now.Add(-2 * 24 * time.Hour),
+			URL:  "https://github.com/0-draft/api/issues/140",
+			Body: "Clients that honor Retry-After still get throttled, because the limiter refills on its own clock.",
+		},
+		{
+			Number: 20, Title: "idea: a compact one-line layout",
+			Repo: prprRepo, Author: "carol", IsIssue: true, Comments: 1,
+			Labels:    []string{enhancement},
+			UpdatedAt: now.Add(-6 * 24 * time.Hour), CreatedAt: now.Add(-6 * 24 * time.Hour),
+			URL: "https://github.com/kanywst/prpr/issues/20",
 		},
 		{
 			// A contribution outside the watched owners, for the elsewhere tab.

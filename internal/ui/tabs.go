@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/kanywst/prpr/internal/gh"
@@ -17,10 +18,26 @@ const (
 	tabElsewhere
 	tabDraft
 	tabBots
+	tabIssues
 )
 
-// allTabs is the tab bar's order.
-var allTabs = []tabID{tabAll, tabMine, tabReview, tabElsewhere, tabDraft, tabBots}
+// allTabs is the tab bar's order when issues are shown.
+var allTabs = []tabID{tabAll, tabMine, tabReview, tabElsewhere, tabIssues, tabDraft, tabBots}
+
+// tabsFor is the tab bar: every tab, less the issues tab when issues are not
+// being searched and it could only ever be empty.
+func tabsFor(issues bool) []tabID {
+	if issues {
+		return allTabs
+	}
+	out := make([]tabID, 0, len(allTabs)-1)
+	for _, t := range allTabs {
+		if t != tabIssues {
+			out = append(out, t)
+		}
+	}
+	return out
+}
 
 // viewer is who is looking at the list: what the identity-based tabs need to
 // sort a pull request into place.
@@ -39,15 +56,22 @@ func (v viewer) watches(owner string) bool {
 	return false
 }
 
-// label returns the tab's display name in the active language.
-func (t tabID) label(s Strings) string {
+// label returns the tab's display name in the active language. With issues
+// shown, the review tab also holds the issues assigned to you, and is named for
+// that.
+func (t tabID) label(s Strings, issues bool) string {
 	switch t {
 	case tabAll:
 		return s.TabAll
 	case tabMine:
 		return s.TabMine
 	case tabReview:
+		if issues {
+			return s.TabYourTurn
+		}
 		return s.TabReview
+	case tabIssues:
+		return s.TabIssues
 	case tabElsewhere:
 		return s.TabElsewhere
 	case tabDraft:
@@ -74,7 +98,7 @@ func (t tabID) keep(pr gh.PR, v viewer) bool {
 	case tabMine:
 		return pr.AuthoredBy(v.me)
 	case tabReview:
-		return pr.AwaitsReviewFrom(v.me)
+		return pr.WaitsOn(v.me)
 	case tabElsewhere:
 		// Only the authored and review-request searches reach outside the
 		// watched owners, so this is your contributions to, and review
@@ -82,6 +106,8 @@ func (t tabID) keep(pr gh.PR, v viewer) bool {
 		return !pr.IsBot && !v.watches(pr.Owner())
 	case tabDraft:
 		return !pr.IsBot && pr.IsDraft
+	case tabIssues:
+		return !pr.IsBot && pr.IsIssue
 	case tabBots:
 		return pr.IsBot
 	default:
@@ -89,12 +115,11 @@ func (t tabID) keep(pr gh.PR, v viewer) bool {
 	}
 }
 
-// next returns the following tab, wrapping around.
-func (t tabID) next() tabID {
-	return tabID((int(t) + 1) % len(allTabs))
-}
-
-// prev returns the preceding tab, wrapping around.
-func (t tabID) prev() tabID {
-	return tabID((int(t) - 1 + len(allTabs)) % len(allTabs))
+// step returns the tab delta places along tabs, wrapping around.
+func (t tabID) step(tabs []tabID, delta int) tabID {
+	i := slices.Index(tabs, t)
+	if i < 0 {
+		return tabs[0]
+	}
+	return tabs[(i+delta+len(tabs))%len(tabs)]
 }

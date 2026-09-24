@@ -70,6 +70,20 @@ query($q: String!, $limit: Int!) {
   search(query: $q, type: ISSUE, first: $limit) {
     issueCount
     nodes {
+      __typename
+      ... on Issue {
+        number
+        title
+        bodyText
+        url
+        createdAt
+        updatedAt
+        comments { totalCount }
+        author { __typename login }
+        repository { nameWithOwner }
+        labels(first: 10) { nodes { name } }
+        assignees(first: 10) { nodes { login } }
+      }
       ... on PullRequest {
         number
         title
@@ -113,6 +127,7 @@ type searchResponse struct {
 }
 
 type searchNode struct {
+	Typename     string `json:"__typename"`
 	Number       int    `json:"number"`
 	Title        string `json:"title"`
 	BodyText     string `json:"bodyText"`
@@ -143,6 +158,11 @@ type searchNode struct {
 			Name string `json:"name"`
 		} `json:"nodes"`
 	} `json:"labels"`
+	Assignees struct {
+		Nodes []struct {
+			Login string `json:"login"`
+		} `json:"nodes"`
+	} `json:"assignees"`
 	ReviewRequests struct {
 		Nodes []struct {
 			RequestedReviewer *struct {
@@ -253,21 +273,25 @@ func SortPRs(prs []PR) {
 const stateQuery = `
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) { state }
+    issueOrPullRequest(number: $number) {
+      ... on Issue { state }
+      ... on PullRequest { state }
+    }
   }
 }`
 
 type stateResponse struct {
 	Repository struct {
-		PullRequest struct {
+		IssueOrPullRequest struct {
 			State string `json:"state"`
-		} `json:"pullRequest"`
+		} `json:"issueOrPullRequest"`
 	} `json:"repository"`
 }
 
-// State reports how a pull request left the open list: merged, closed, or
-// still open (which happens when it was only edited into a state the search
-// query no longer matches).
+// State reports how a pull request or issue left the open list: merged,
+// closed, or still open (which happens when it was only edited into a state
+// the search query no longer matches). Issues and pull requests share one
+// number space per repository, so the number alone says which it is.
 func (c *Client) State(ctx context.Context, repo string, number int) (State, error) {
 	owner, name, ok := strings.Cut(repo, "/")
 	if !ok {
@@ -278,5 +302,5 @@ func (c *Client) State(ctx context.Context, repo string, number int) (State, err
 	if err := c.gql.DoWithContext(ctx, stateQuery, vars, &resp); err != nil {
 		return "", fmt.Errorf("could not read the state of %s#%d: %w", repo, number, err)
 	}
-	return State(resp.Repository.PullRequest.State), nil
+	return State(resp.Repository.IssueOrPullRequest.State), nil
 }

@@ -19,6 +19,7 @@ func (n searchNode) toPR() (PR, bool) {
 		Body:         n.BodyText,
 		URL:          n.URL,
 		Repo:         n.Repository.NameWithOwner,
+		IsIssue:      n.Typename == "Issue",
 		IsDraft:      n.IsDraft,
 		CreatedAt:    parseTime(n.CreatedAt),
 		UpdatedAt:    parseTime(n.UpdatedAt),
@@ -45,6 +46,11 @@ func (n searchNode) toPR() (PR, bool) {
 	for _, l := range n.Labels.Nodes {
 		if l.Name != "" {
 			pr.Labels = append(pr.Labels, l.Name)
+		}
+	}
+	for _, a := range n.Assignees.Nodes {
+		if a.Login != "" {
+			pr.Assignees = append(pr.Assignees, a.Login)
 		}
 	}
 	for _, rr := range n.ReviewRequests.Nodes {

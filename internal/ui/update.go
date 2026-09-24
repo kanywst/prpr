@@ -302,12 +302,12 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.syncDetail()
 
 	case key.Matches(msg, m.keys.NextTab):
-		m.tab = m.tab.next()
+		m.tab = m.tab.step(m.tabs(), 1)
 		m.offset = 0
 		m.recompute()
 
 	case key.Matches(msg, m.keys.PrevTab):
-		m.tab = m.tab.prev()
+		m.tab = m.tab.step(m.tabs(), -1)
 		m.offset = 0
 		m.recompute()
 

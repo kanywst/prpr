@@ -39,6 +39,9 @@ type Config struct {
 	// ReviewRequests adds the PRs asking for your review anywhere, not just
 	// under the owners.
 	ReviewRequests bool `yaml:"review_requests"`
+	// Issues adds open issues to the list, searched the same way as pull
+	// requests. Off by default: it doubles the searches every refresh runs.
+	Issues bool `yaml:"issues"`
 	// Cache keeps the last list on disk, so the next start shows it at once
 	// while the first refresh is in flight.
 	Cache bool `yaml:"cache"`

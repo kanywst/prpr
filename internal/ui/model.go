@@ -54,6 +54,9 @@ type Config struct {
 	// ReviewRequests adds every open PR that asks the viewer for a review,
 	// wherever it lives, on top of the watched owners.
 	ReviewRequests bool
+	// Issues adds open issues, searched the same way as pull requests, to
+	// the list.
+	Issues bool
 	// Cached is the list the previous run left behind, shown until the first
 	// refresh lands. Nil starts from an empty screen.
 	Cached *cache.Snapshot
@@ -99,6 +102,7 @@ type Model struct {
 
 	authored       bool
 	reviewRequests bool
+	issues         bool
 
 	// pinnedOwners is non-empty when the user passed --owner, in which case
 	// owner discovery is skipped entirely.
@@ -181,6 +185,7 @@ func New(cfg Config) Model {
 		timeout:        cfg.Timeout,
 		authored:       cfg.Authored,
 		reviewRequests: cfg.ReviewRequests,
+		issues:         cfg.Issues,
 		pinnedOwners:   cfg.Owners,
 		excludeOwners:  cfg.ExcludeOwners,
 		owners:         cfg.Owners,
@@ -241,8 +246,16 @@ func (m Model) scopes() []gh.Scope {
 	if m.me != "" && m.reviewRequests {
 		out = append(out, gh.ReviewRequestedScope(m.me))
 	}
+	if m.issues {
+		for _, s := range out {
+			out = append(out, s.ForIssues())
+		}
+	}
 	return out
 }
+
+// tabs is the tab bar in order.
+func (m Model) tabs() []tabID { return tabsFor(m.issues) }
 
 // viewer is who the tabs sort pull requests for.
 func (m Model) viewer() viewer { return viewer{me: m.me, owners: m.owners} }

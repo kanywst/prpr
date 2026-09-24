@@ -63,6 +63,7 @@ func run(args []string) error {
 	interval := fs.Duration("interval", def.Interval, "auto-refresh interval")
 	timeout := fs.Duration("timeout", def.Timeout, "timeout for a single refresh")
 	lang := fs.String("lang", def.Lang, "interface language: en or ja")
+	issues := fs.Bool("issues", def.Issues, "list open issues alongside the pull requests")
 	useCache := fs.Bool("cache", def.Cache, "show the last list at start-up while the first refresh runs (--cache=false to turn off)")
 	configPath := fs.String("config", "", "config file (default $XDG_CONFIG_HOME/prpr/config.yaml, or ~/.config/prpr/config.yaml)")
 	demoMode := fs.Bool("demo", false, "run against a canned pull request list, for screenshots and recordings")
@@ -92,6 +93,8 @@ func run(args []string) error {
 			cfg.Timeout = *timeout
 		case "lang":
 			cfg.Lang = *lang
+		case "issues":
+			cfg.Issues = *issues
 		case "cache":
 			cfg.Cache = *useCache
 		}
@@ -118,6 +121,7 @@ func run(args []string) error {
 		Lang:           parsed,
 		Authored:       cfg.Authored,
 		ReviewRequests: cfg.ReviewRequests,
+		Issues:         cfg.Issues,
 	}
 	// The demo never touches the cache: its fixtures would overwrite the real
 	// list, and a recording must not start from whatever was cached.
