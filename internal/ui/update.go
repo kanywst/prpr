@@ -57,6 +57,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleTick(time.Time(msg))
 
 	case ownersMsg:
+		// A pinned-owner start could not confirm the cached login. Keep the
+		// cached list and login as they are, search the pinned owners anyway,
+		// and try confirming again on the next refresh.
+		if msg.me == "" && len(m.pinnedOwners) > 0 {
+			return m.startRefresh(m.fetchCmd())
+		}
 		m.me = msg.me
 		// Discovery also runs for pinned owners when the cache needs its
 		// login confirmed, and must not replace the owners that were asked

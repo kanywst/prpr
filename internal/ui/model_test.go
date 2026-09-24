@@ -760,7 +760,7 @@ func TestCachedStartWithPinnedOwnersSurvivesAFailedLookup(t *testing.T) {
 	now := time.Now()
 	f := &fakeFetcher{err: errors.New("offline")}
 	m := New(Config{
-		Fetcher: f, Owners: []string{"kanywst"}, Interval: time.Minute, Timeout: time.Second,
+		Fetcher: f, Owners: []string{"kanywst"}, Interval: time.Minute, Timeout: time.Second, Authored: true,
 		Cached: &cache.Snapshot{Me: "kanywst", Owners: []string{"kanywst"}, PRs: samplePRs(now), At: now},
 	})
 
@@ -772,9 +772,22 @@ func TestCachedStartWithPinnedOwnersSurvivesAFailedLookup(t *testing.T) {
 	if !ok {
 		t.Fatalf("refresh emitted %T, want ownersMsg so the pinned owners are still searched", msgs[0])
 	}
+	// #128 lives outside the pinned owner and is held only by the author scope.
+	before := len(m.prs)
+	if before != 2 {
+		t.Fatalf("cached prs = %d, want #12 and #128", before)
+	}
 	m, cmd := step(t, m, o)
-	if m.unverified || cmd == nil {
-		t.Errorf("unverified = %v, cmd = %v; want the pinned owners' fetch to go ahead", m.unverified, cmd)
+	if cmd == nil {
+		t.Fatal("the pinned owners' fetch did not go ahead")
+	}
+	// The failed lookup says nothing about who is logged in: the cached login
+	// and list stay, and the next refresh tries confirming again.
+	if m.me != "kanywst" || len(m.prs) != before {
+		t.Errorf("me = %q, prs = %d; want the cached login and all %d PRs kept", m.me, len(m.prs), before)
+	}
+	if !m.unverified {
+		t.Error("the cached login counts as confirmed after a failed lookup")
 	}
 }
 
