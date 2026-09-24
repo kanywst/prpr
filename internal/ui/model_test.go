@@ -844,3 +844,23 @@ func TestOldCacheLooksUpOnlyWhatTheBandCanShow(t *testing.T) {
 		t.Errorf("looked up %d vanished PRs, want %d", gone, maxFarewells)
 	}
 }
+
+func TestDropUncoveredLeavesASavedListAlone(t *testing.T) {
+	now := time.Now()
+	m := New(Config{Fetcher: &fakeFetcher{}, Interval: time.Minute, Timeout: time.Second})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: samplePRs(now)}, at: now})
+
+	// What a queued saveCmd would be encoding.
+	shared := m.prs
+	want := slices.Clone(shared)
+	m.owners = []string{"kanywst"}
+	m.dropUncovered()
+
+	if !slices.EqualFunc(shared, want, func(a, b gh.PR) bool { return a.Key() == b.Key() }) {
+		t.Errorf("dropUncovered rewrote the previous list in place: %v", shared)
+	}
+	if len(m.prs) != 1 {
+		t.Errorf("prs = %d, want only the kanywst PR", len(m.prs))
+	}
+}

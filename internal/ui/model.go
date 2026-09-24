@@ -220,7 +220,9 @@ func New(cfg Config) Model {
 // it had closed.
 func (m *Model) dropUncovered() {
 	scopes := m.scopes()
-	m.prs = slices.DeleteFunc(m.prs, func(pr gh.PR) bool {
+	// DeleteFunc works in place, and a queued saveCmd may still be encoding
+	// the current backing array, so filter a copy.
+	m.prs = slices.DeleteFunc(slices.Clone(m.prs), func(pr gh.PR) bool {
 		return !slices.ContainsFunc(scopes, func(s gh.Scope) bool { return s.Covers(pr) })
 	})
 }

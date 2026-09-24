@@ -154,7 +154,9 @@ func (m Model) saveCmd(prs []gh.PR, at time.Time) tea.Cmd {
 		return nil
 	}
 	save := m.saveCache
-	snap := cache.Snapshot{Me: m.me, Owners: slices.Clone(m.owners), PRs: prs, At: at}
+	// The snapshot is encoded off the update loop, so it gets its own copies
+	// rather than sharing arrays the model may go on to change.
+	snap := cache.Snapshot{Me: m.me, Owners: slices.Clone(m.owners), PRs: slices.Clone(prs), At: at}
 	return func() tea.Msg {
 		_ = save(snap)
 		return nil
