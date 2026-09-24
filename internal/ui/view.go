@@ -302,6 +302,8 @@ func (m Model) emptyMessage() string {
 		return m.s.EmptyElsewhere
 	case tabDraft:
 		return m.s.EmptyDraft
+	case tabBots:
+		return m.s.EmptyBots
 	default:
 		return m.s.EmptyAll
 	}

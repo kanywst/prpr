@@ -32,6 +32,7 @@ func (n searchNode) toPR() (PR, bool) {
 
 	if n.Author != nil {
 		pr.Author = n.Author.Login
+		pr.IsBot = n.Author.Typename == "Bot"
 	}
 	if n.ReviewDecision != nil {
 		pr.Review = Review(*n.ReviewDecision)

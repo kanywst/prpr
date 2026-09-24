@@ -85,7 +85,7 @@ query($q: String!, $limit: Int!) {
         headRefName
         baseRefName
         comments { totalCount }
-        author { login }
+        author { __typename login }
         repository { nameWithOwner }
         labels(first: 10) { nodes { name } }
         reviewRequests(first: 20) {
@@ -132,7 +132,8 @@ type searchNode struct {
 	} `json:"comments"`
 	// author is null when the account has been deleted.
 	Author *struct {
-		Login string `json:"login"`
+		Typename string `json:"__typename"`
+		Login    string `json:"login"`
 	} `json:"author"`
 	Repository struct {
 		NameWithOwner string `json:"nameWithOwner"`
