@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -187,5 +188,19 @@ func TestRenderMarksIssues(t *testing.T) {
 	out = ansi.Strip(m.render())
 	if !strings.Contains(out, m.s.DetailAssignees) || strings.Contains(out, m.s.DetailBranch) {
 		t.Errorf("issue detail should list assignees and no branch:\n%s", out)
+	}
+}
+
+func TestWarningNamesAFailedOwnerOnce(t *testing.T) {
+	m := loadedModel(t, 120, 40, samplePRs(time.Now()))
+	sso := errors.New("SAML")
+	m.outcomes = []gh.Outcome{
+		{Scope: gh.OwnerScope("0-draft"), Err: sso},
+		{Scope: gh.OwnerScope("0-draft").ForIssues(), Err: sso},
+		{Scope: gh.AuthorScope("kanywst").ForIssues(), Err: sso},
+	}
+	got := m.warning()
+	if strings.Contains(got, "issues:0-draft") || !strings.Contains(got, "issues:author:kanywst") {
+		t.Errorf("warning = %q, want 0-draft once and the lone issue failure named", got)
 	}
 }

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -154,6 +155,13 @@ func (m Model) liveStatus() string {
 // list out of the header entirely.
 const maxWarningWidth = 36
 
+// failed reports whether the last refresh's search of this scope failed.
+func (m Model) failed(kind gh.ScopeKind, login string, issues bool) bool {
+	return slices.ContainsFunc(m.outcomes, func(o gh.Outcome) bool {
+		return o.Err != nil && o.Scope == gh.Scope{Kind: kind, Login: login, Issues: issues}
+	})
+}
+
 // warning describes what the last refresh could not see: scopes that failed,
 // or failing that, scopes that hit the page cap. Failures come first because
 // they hide whole owners, where a cap only hides the oldest pull requests.
@@ -162,6 +170,9 @@ func (m Model) warning() string {
 	var capped *gh.Outcome
 	for i, o := range m.outcomes {
 		switch {
+		case o.Err != nil && o.Scope.Issues && m.failed(o.Scope.Kind, o.Scope.Login, false):
+			// An org refusing the token fails both its searches; naming it
+			// once is enough.
 		case o.Err != nil:
 			failed = append(failed, o.Scope.String())
 		case o.Truncated() && capped == nil:
