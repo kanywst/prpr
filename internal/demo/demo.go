@@ -26,6 +26,8 @@ const (
 	viewer = "kanywst"
 	// mainRef is the base branch every fixture targets.
 	mainRef = "main"
+	// apiRepo is the busiest fixture repository.
+	apiRepo = "0-draft/api"
 )
 
 // Fetcher implements the interface the UI consumes, from fixtures.
@@ -96,7 +98,7 @@ func fixtures(now time.Time) []gh.PR {
 	prs := []gh.PR{
 		{
 			Number: 128, Title: "api: add a per-token rate limiter",
-			Repo: "0-draft/api", Author: viewer,
+			Repo: apiRepo, Author: viewer,
 			Check: gh.CheckSuccess, Review: gh.ReviewApproved,
 			Additions: 142, Deletions: 9, ChangedFiles: 5, Comments: 3,
 			HeadRef: "feat/rate-limiter", BaseRef: mainRef,
@@ -109,7 +111,7 @@ func fixtures(now time.Time) []gh.PR {
 		},
 		{
 			Number: 127, Title: "fix: nil deref when the request body is empty",
-			Repo: "0-draft/api", Author: "alice",
+			Repo: apiRepo, Author: "alice",
 			Check: gh.CheckPending, Review: gh.ReviewRequired,
 			Reviewers: []string{viewer},
 			Additions: 8, Deletions: 2, ChangedFiles: 1, Comments: 1,
@@ -169,6 +171,17 @@ func fixtures(now time.Time) []gh.PR {
 			HeadRef: "ci/windows-arm64", BaseRef: mainRef,
 			UpdatedAt: now.Add(-40 * 24 * time.Hour), CreatedAt: now.Add(-40 * 24 * time.Hour),
 			URL: "https://github.com/kanywst/scoop-bucket/pull/3",
+		},
+		{
+			// A dependency bump, for the bots tab.
+			Number: 131, Title: "chore(deps): bump golang.org/x/net from 0.33.0 to 0.34.0",
+			Repo: apiRepo, Author: "dependabot", IsBot: true,
+			Check:     gh.CheckSuccess,
+			Additions: 3, Deletions: 3, ChangedFiles: 2,
+			HeadRef: "dependabot/go_modules/golang.org/x/net-0.34.0", BaseRef: mainRef,
+			Labels:    []string{"dependencies"},
+			UpdatedAt: now.Add(-9 * time.Hour), CreatedAt: now.Add(-9 * time.Hour),
+			URL: "https://github.com/0-draft/api/pull/131",
 		},
 		{
 			// A contribution outside the watched owners, for the elsewhere tab.

@@ -220,6 +220,41 @@ func TestTabsPartitionByViewer(t *testing.T) {
 	}
 }
 
+func TestBotsHaveTheirOwnTab(t *testing.T) {
+	now := time.Now()
+	bump := gh.PR{
+		Number: 131, Title: "chore(deps): bump x", Repo: "0-draft/api",
+		Author: "dependabot", IsBot: true, IsDraft: true,
+		UpdatedAt: now.Add(-time.Hour),
+	}
+	asked := gh.PR{
+		Number: 9, Title: "chore(deps): bump y", Repo: "elsewhere/lib",
+		Author: "renovate", IsBot: true, Reviewers: []string{"kanywst"},
+		UpdatedAt: now.Add(-2 * time.Hour),
+	}
+	prs := append(samplePRs(now), bump, asked)
+
+	m := testModel(t, &fakeFetcher{me: "kanywst", pages: [][]gh.PR{prs}})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: prs}, at: now})
+
+	counts := m.counts()
+	for _, tt := range []struct {
+		tab  tabID
+		want int
+	}{
+		{tabAll, 3},       // the bots stay out of everything
+		{tabReview, 2},    // ...but a review asked of you by name is yours
+		{tabElsewhere, 0}, // renovate's PR is outside the owners, and still a bot
+		{tabDraft, 1},     // dependabot's draft is not counted
+		{tabBots, 2},
+	} {
+		if got := counts[tt.tab]; got != tt.want {
+			t.Errorf("counts[%v] = %d, want %d", tt.tab, got, tt.want)
+		}
+	}
+}
+
 func TestFilterNarrowsAndKeepsSelection(t *testing.T) {
 	now := time.Now()
 	m := testModel(t, &fakeFetcher{me: "kanywst", pages: [][]gh.PR{samplePRs(now)}})

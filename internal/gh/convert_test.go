@@ -127,3 +127,23 @@ func TestParseTimeRejectsGarbage(t *testing.T) {
 		t.Errorf("parseTime(\"\") = %v, want zero", got)
 	}
 }
+
+func TestToPRMarksBots(t *testing.T) {
+	for _, tt := range []struct {
+		author string
+		want   bool
+	}{
+		{`{"__typename": "Bot", "login": "dependabot"}`, true},
+		{`{"__typename": "User", "login": "kanywst"}`, false},
+		{`null`, false},
+	} {
+		n := decodeNode(t, `{"number": 1, "repository": {"nameWithOwner": "o/r"}, "author": `+tt.author+`}`)
+		pr, ok := n.toPR()
+		if !ok {
+			t.Fatalf("toPR(%s) returned ok=false", tt.author)
+		}
+		if pr.IsBot != tt.want {
+			t.Errorf("toPR(%s).IsBot = %v, want %v", tt.author, pr.IsBot, tt.want)
+		}
+	}
+}

@@ -16,10 +16,11 @@ const (
 	tabReview
 	tabElsewhere
 	tabDraft
+	tabBots
 )
 
 // allTabs is the tab bar's order.
-var allTabs = []tabID{tabAll, tabMine, tabReview, tabElsewhere, tabDraft}
+var allTabs = []tabID{tabAll, tabMine, tabReview, tabElsewhere, tabDraft, tabBots}
 
 // viewer is who is looking at the list: what the identity-based tabs need to
 // sort a pull request into place.
@@ -51,6 +52,8 @@ func (t tabID) label(s Strings) string {
 		return s.TabElsewhere
 	case tabDraft:
 		return s.TabDraft
+	case tabBots:
+		return s.TabBots
 	default:
 		return s.TabAll
 	}
@@ -59,10 +62,15 @@ func (t tabID) label(s Strings) string {
 // keep reports whether a pull request belongs in this tab. When the viewer's
 // login is unknown the identity-based tabs simply stay empty rather than
 // guessing.
+//
+// Bot pull requests (dependency bumps, mostly) get a tab of their own and are
+// kept out of the general views, where a week of dependabot would otherwise
+// bury the pull requests people wrote. A review request is the exception: one
+// addressed to you by name is yours to act on, whoever opened it.
 func (t tabID) keep(pr gh.PR, v viewer) bool {
 	switch t {
 	case tabAll:
-		return true
+		return !pr.IsBot
 	case tabMine:
 		return pr.AuthoredBy(v.me)
 	case tabReview:
@@ -71,9 +79,11 @@ func (t tabID) keep(pr gh.PR, v viewer) bool {
 		// Only the authored and review-request searches reach outside the
 		// watched owners, so this is your contributions to, and review
 		// requests from, everyone else.
-		return !v.watches(pr.Owner())
+		return !pr.IsBot && !v.watches(pr.Owner())
 	case tabDraft:
-		return pr.IsDraft
+		return !pr.IsBot && pr.IsDraft
+	case tabBots:
+		return pr.IsBot
 	default:
 		return true
 	}

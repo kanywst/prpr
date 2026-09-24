@@ -45,12 +45,15 @@ const (
 
 // PR is one open pull request, as prpr cares about it.
 type PR struct {
-	Number       int
-	Title        string
-	Body         string
-	URL          string
-	Repo         string // "owner/name"
-	Author       string
+	Number int
+	Title  string
+	Body   string
+	URL    string
+	Repo   string // "owner/name"
+	Author string
+	// IsBot is set when the author is a GitHub App (dependabot, renovate,
+	// github-actions and the like) rather than a person.
+	IsBot        bool
 	IsDraft      bool
 	CreatedAt    time.Time
 	UpdatedAt    time.Time

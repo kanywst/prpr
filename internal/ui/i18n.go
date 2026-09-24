@@ -39,6 +39,7 @@ type Strings struct {
 	TabReview    string
 	TabElsewhere string
 	TabDraft     string
+	TabBots      string
 
 	Collecting string
 	Failed     string
@@ -62,6 +63,7 @@ type Strings struct {
 	EmptyReview     string
 	EmptyElsewhere  string
 	EmptyDraft      string
+	EmptyBots       string
 	EmptyFilter     string
 	ErrorHint       string // one %s: the error
 	TooSmall        string
@@ -136,6 +138,7 @@ var english = Strings{
 	TabReview:    "to review",
 	TabElsewhere: "elsewhere",
 	TabDraft:     "drafts",
+	TabBots:      "bots",
 
 	Collecting: " collecting…",
 	Failed:     "😿 failed",
@@ -159,6 +162,7 @@ var english = Strings{
 	EmptyReview:     "✨ your review queue is empty ✨",
 	EmptyElsewhere:  "✨ nothing open outside your owners ✨",
 	EmptyDraft:      "✨ no drafts ✨",
+	EmptyBots:       "✨ no bot pull requests ✨",
 	EmptyFilter:     "🔍 nothing matched\n\nesc clears the filter",
 	ErrorHint:       "😿 %s\n\nr to try again",
 	TooSmall:        "🌸 a little too small…\ngive me some more room",
@@ -225,6 +229,7 @@ var japanese = Strings{
 	TabReview:    "レビュー待ち",
 	TabElsewhere: "外部",
 	TabDraft:     "下書き",
+	TabBots:      "bot",
 
 	Collecting: " あつめてる…",
 	Failed:     "😿 しっぱい",
@@ -248,6 +253,7 @@ var japanese = Strings{
 	EmptyReview:     "✨ レビュー待ちゼロ! えらい ✨",
 	EmptyElsewhere:  "✨ 外部の PR はないよ ✨",
 	EmptyDraft:      "✨ 下書きはないよ ✨",
+	EmptyBots:       "✨ bot の PR はないよ ✨",
 	EmptyFilter:     "🔍 みつからなかった\n\nesc で絞り込み解除",
 	ErrorHint:       "😿 %s\n\nr でもう一回",
 	TooSmall:        "🌸 ちいさすぎるかも…\nもうすこし広げてね",
