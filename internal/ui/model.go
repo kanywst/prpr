@@ -200,7 +200,8 @@ func New(cfg Config) Model {
 	if c := cfg.Cached; c != nil {
 		m.me = c.Me
 		if len(m.pinnedOwners) == 0 {
-			m.owners = c.Owners
+			// exclude_owners may have grown since the cache was written.
+			m.owners = withoutExcluded(c.Owners, m.excludeOwners)
 		}
 		m.prs = c.PRs
 		m.dropUncovered()

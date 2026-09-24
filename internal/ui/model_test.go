@@ -755,3 +755,79 @@ func TestCachedListRespectsPinnedOwners(t *testing.T) {
 		t.Errorf("owners = %v, discovery replaced the pinned owners", m.owners)
 	}
 }
+
+func TestCachedStartWithPinnedOwnersSurvivesAFailedLookup(t *testing.T) {
+	now := time.Now()
+	f := &fakeFetcher{err: errors.New("offline")}
+	m := New(Config{
+		Fetcher: f, Owners: []string{"kanywst"}, Interval: time.Minute, Timeout: time.Second,
+		Cached: &cache.Snapshot{Me: "kanywst", Owners: []string{"kanywst"}, PRs: samplePRs(now), At: now},
+	})
+
+	msgs := drain(m.refreshCmd())
+	if len(msgs) != 1 {
+		t.Fatalf("refresh emitted %v, want one ownersMsg", msgs)
+	}
+	o, ok := msgs[0].(ownersMsg)
+	if !ok {
+		t.Fatalf("refresh emitted %T, want ownersMsg so the pinned owners are still searched", msgs[0])
+	}
+	m, cmd := step(t, m, o)
+	if m.unverified || cmd == nil {
+		t.Errorf("unverified = %v, cmd = %v; want the pinned owners' fetch to go ahead", m.unverified, cmd)
+	}
+}
+
+func TestCachedStartAppliesExcludeOwners(t *testing.T) {
+	now := time.Now()
+	m := New(Config{
+		Fetcher: &fakeFetcher{}, ExcludeOwners: []string{"0-DRAFT"},
+		Interval: time.Minute, Timeout: time.Second,
+		Cached: &cache.Snapshot{Me: "kanywst", Owners: []string{"kanywst", "0-draft"}, PRs: samplePRs(now), At: now},
+	})
+	if len(m.owners) != 1 || len(m.prs) != 1 || m.prs[0].Number != 12 {
+		t.Errorf("owners = %v, prs = %v; want 0-draft excluded from the cached list", m.owners, m.prs)
+	}
+}
+
+func TestCachedStartWithNothingToSearchClearsTheCache(t *testing.T) {
+	now := time.Now()
+	var saved []cache.Snapshot
+	m := New(Config{
+		Fetcher: &fakeFetcher{}, ExcludeOwners: []string{"kanywst"},
+		Interval: time.Minute, Timeout: time.Second,
+		Cached:    &cache.Snapshot{Me: "kanywst", Owners: []string{"kanywst"}, PRs: samplePRs(now), At: now},
+		SaveCache: func(s cache.Snapshot) error { saved = append(saved, s); return nil },
+	})
+	m, cmd := step(t, m, ownersMsg{me: "kanywst"})
+	drain(cmd)
+	if !m.cachedAt.IsZero() {
+		t.Error("the cached badge outlived a refresh with nothing to search")
+	}
+	if len(saved) != 1 || len(saved[0].PRs) != 0 {
+		t.Errorf("saved = %+v, want the empty list stored", saved)
+	}
+}
+
+func TestOldCacheLooksUpOnlyWhatTheBandCanShow(t *testing.T) {
+	now := time.Now()
+	cached := make([]gh.PR, 0, 10)
+	for i := range 10 {
+		cached = append(cached, gh.PR{Number: i + 1, Repo: "kanywst/repo", Author: "alice", UpdatedAt: now})
+	}
+	m := New(Config{
+		Fetcher: &fakeFetcher{}, Interval: time.Minute, Timeout: time.Second,
+		Cached: &cache.Snapshot{Me: "kanywst", Owners: []string{"kanywst"}, PRs: cached, At: now.Add(-30 * 24 * time.Hour)},
+	})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst"}})
+	_, cmd := step(t, m, prsMsg{res: gh.Result{Outcomes: []gh.Outcome{{Scope: gh.OwnerScope("kanywst")}}}, at: now})
+	var gone int
+	for _, msg := range drain(cmd) {
+		if _, ok := msg.(goneMsg); ok {
+			gone++
+		}
+	}
+	if gone != maxFarewells {
+		t.Errorf("looked up %d vanished PRs, want %d", gone, maxFarewells)
+	}
+}

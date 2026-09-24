@@ -135,7 +135,8 @@ func (m Model) startRefresh(cmd tea.Cmd) (Model, tea.Cmd) {
 		m.loading = false
 		m.ready = true
 		m.lastFetch = m.now
-		return m, nil
+		m.cachedAt = time.Time{}
+		return m, m.saveCmd(nil, m.now)
 	}
 	m.loading = true
 	return m, cmd
@@ -161,9 +162,15 @@ func (m Model) refreshDue() bool {
 // review-request search just means the review was done, and leaves quietly.
 //
 // The previous list may be the cached one from the last run, in which case
-// whatever was merged while prpr was not running gets its farewell now.
+// whatever was merged while prpr was not running gets its farewell now. Only
+// as many are looked up as the farewell band can show: a cache from weeks ago
+// would otherwise fire a lookup for every pull request closed since.
 func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 	prs := slices.Clone(msg.res.PRs)
+	lookups := len(m.prs)
+	if !m.cachedAt.IsZero() {
+		lookups = maxFarewells
+	}
 
 	var cmds []tea.Cmd
 	fresh := make(map[string]bool, len(prs))
@@ -178,7 +185,7 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 			prs = append(prs, old)
 			carried = true
 		case msg.res.ReviewOnly(old) && !msg.res.Capped(old):
-		default:
+		case len(cmds) < lookups:
 			cmds = append(cmds, m.stateCmd(old, msg.res.Capped(old)))
 		}
 	}
