@@ -59,24 +59,37 @@ func tickCmd() tea.Cmd {
 
 // discoverOwnersCmd resolves which owners to watch from the authenticated
 // user, so prpr needs no per-user configuration to be useful.
+//
+// It also confirms a cached login when the owners are pinned. Then a failed
+// lookup must not hold the pinned owners' search hostage, so it settles as an
+// unknown login, which the next refresh looks up again alongside the fetch.
 func (m Model) discoverOwnersCmd() tea.Cmd {
 	fetcher, timeout, exclude := m.fetcher, m.timeout, m.excludeOwners
+	pinned := len(m.pinnedOwners) > 0
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
 		me, orgs, err := fetcher.Viewer(ctx)
-		if err != nil {
+		switch {
+		case err != nil && pinned:
+			return ownersMsg{}
+		case err != nil:
 			return errMsg{err}
 		}
-		owners := make([]string, 0, len(orgs)+1)
-		for _, o := range append([]string{me}, orgs...) {
-			if !slices.ContainsFunc(exclude, func(x string) bool { return strings.EqualFold(x, o) }) {
-				owners = append(owners, o)
-			}
-		}
-		return ownersMsg{me: me, owners: owners}
+		return ownersMsg{me: me, owners: withoutExcluded(append([]string{me}, orgs...), exclude)}
 	}
+}
+
+// withoutExcluded drops the excluded owners, ignoring case as GitHub does.
+func withoutExcluded(owners, exclude []string) []string {
+	out := make([]string, 0, len(owners))
+	for _, o := range owners {
+		if !slices.ContainsFunc(exclude, func(x string) bool { return strings.EqualFold(x, o) }) {
+			out = append(out, o)
+		}
+	}
+	return out
 }
 
 // viewerCmd resolves just the viewer's login. It is used when --owner pinned
