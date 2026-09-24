@@ -128,3 +128,35 @@ func TestReviewOnly(t *testing.T) {
 		t.Error("a PR no scope covers was treated as review-only")
 	}
 }
+
+func TestIssueScopes(t *testing.T) {
+	issue := PR{Repo: "0-draft/api", Number: 1, Author: "alice", IsIssue: true, Assignees: []string{"kanywst"}}
+	pr := PR{Repo: "0-draft/api", Number: 2, Author: "alice", Reviewers: []string{"kanywst"}}
+
+	for _, tt := range []struct {
+		scope Scope
+		query string
+		name  string
+		issue bool
+		pr    bool
+	}{
+		{OwnerScope("0-draft"), "is:pr is:open archived:false user:0-draft", "0-draft", false, true},
+		{OwnerScope("0-draft").ForIssues(), "is:issue is:open archived:false user:0-draft", "issues:0-draft", true, false},
+		{AuthorScope("alice").ForIssues(), "is:issue is:open archived:false author:alice", "issues:author:alice", true, false},
+		{ReviewRequestedScope("kanywst"), "is:pr is:open archived:false user-review-requested:kanywst", "review-requested:kanywst", false, true},
+		{ReviewRequestedScope("kanywst").ForIssues(), "is:issue is:open archived:false assignee:kanywst", "assignee:kanywst", true, false},
+	} {
+		if got := tt.scope.query(); got != tt.query {
+			t.Errorf("%v query = %q, want %q", tt.scope, got, tt.query)
+		}
+		if got := tt.scope.String(); got != tt.name {
+			t.Errorf("String() = %q, want %q", got, tt.name)
+		}
+		if got := tt.scope.Covers(issue); got != tt.issue {
+			t.Errorf("%v covers the issue = %v, want %v", tt.scope, got, tt.issue)
+		}
+		if got := tt.scope.Covers(pr); got != tt.pr {
+			t.Errorf("%v covers the PR = %v, want %v", tt.scope, got, tt.pr)
+		}
+	}
+}

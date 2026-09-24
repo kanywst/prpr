@@ -170,3 +170,22 @@ func TestDumpRender(t *testing.T) {
 	m, _ = step(t, m, goneMsg{pr: m.prs[1], state: gh.StateMerged})
 	t.Logf("\n%s", m.render())
 }
+
+func TestRenderMarksIssues(t *testing.T) {
+	now := time.Now()
+	issue := gh.PR{
+		Number: 140, Title: "limiter ignores Retry-After", Repo: "0-draft/api",
+		Author: "alice", IsIssue: true, Assignees: []string{"kanywst"}, UpdatedAt: now,
+	}
+	m := loadedModel(t, 120, 40, []gh.PR{issue})
+	out := ansi.Strip(m.render())
+	if !strings.Contains(out, "🎫") || strings.Contains(out, "📈") {
+		t.Errorf("an issue row should carry 🎫 and no diff stat:\n%s", out)
+	}
+
+	m, _ = step(t, m, tea.KeyPressMsg{Code: 'd', Text: "d"})
+	out = ansi.Strip(m.render())
+	if !strings.Contains(out, m.s.DetailAssignees) || strings.Contains(out, m.s.DetailBranch) {
+		t.Errorf("issue detail should list assignees and no branch:\n%s", out)
+	}
+}

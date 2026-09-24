@@ -40,6 +40,8 @@ type Strings struct {
 	TabElsewhere string
 	TabDraft     string
 	TabBots      string
+	TabIssues    string
+	TabYourTurn  string
 
 	Collecting string
 	Failed     string
@@ -65,6 +67,8 @@ type Strings struct {
 	EmptyElsewhere  string
 	EmptyDraft      string
 	EmptyBots       string
+	EmptyIssues     string
+	EmptyYourTurn   string
 	EmptyFilter     string
 	ErrorHint       string // one %s: the error
 	TooSmall        string
@@ -80,6 +84,7 @@ type Strings struct {
 	DetailComments  string
 	DetailLabels    string
 	DetailReviewers string
+	DetailAssignees string
 	DetailURL       string
 	FilesSuffix     string // one %d
 
@@ -88,6 +93,7 @@ type Strings struct {
 	CheckRun   string
 	CheckFail  string
 	CheckNone  string
+	IssueWord  string
 
 	ReviewApproved string
 	ReviewChanges  string
@@ -140,6 +146,8 @@ var english = Strings{
 	TabElsewhere: "elsewhere",
 	TabDraft:     "drafts",
 	TabBots:      "bots",
+	TabIssues:    "issues",
+	TabYourTurn:  "your turn",
 
 	Collecting: " collecting…",
 	Failed:     "😿 failed",
@@ -165,6 +173,8 @@ var english = Strings{
 	EmptyElsewhere:  "✨ nothing open outside your owners ✨",
 	EmptyDraft:      "✨ no drafts ✨",
 	EmptyBots:       "✨ no bot pull requests ✨",
+	EmptyIssues:     "✨ no open issues ✨",
+	EmptyYourTurn:   "✨ nothing is waiting on you ✨",
 	EmptyFilter:     "🔍 nothing matched\n\nesc clears the filter",
 	ErrorHint:       "😿 %s\n\nr to try again",
 	TooSmall:        "🌸 a little too small…\ngive me some more room",
@@ -180,6 +190,7 @@ var english = Strings{
 	DetailComments:  "comments",
 	DetailLabels:    "labels",
 	DetailReviewers: "reviewers",
+	DetailAssignees: "assignees",
 	DetailURL:       "url",
 	FilesSuffix:     "(%d files)",
 
@@ -188,6 +199,7 @@ var english = Strings{
 	CheckRun:   "checks running",
 	CheckFail:  "checks failing",
 	CheckNone:  "no checks",
+	IssueWord:  "issue",
 
 	ReviewApproved: "approved",
 	ReviewChanges:  "changes requested",
@@ -232,6 +244,8 @@ var japanese = Strings{
 	TabElsewhere: "外部",
 	TabDraft:     "下書き",
 	TabBots:      "bot",
+	TabIssues:    "issue",
+	TabYourTurn:  "自分の番",
 
 	Collecting: " あつめてる…",
 	Failed:     "😿 しっぱい",
@@ -257,6 +271,8 @@ var japanese = Strings{
 	EmptyElsewhere:  "✨ 外部の PR はないよ ✨",
 	EmptyDraft:      "✨ 下書きはないよ ✨",
 	EmptyBots:       "✨ bot の PR はないよ ✨",
+	EmptyIssues:     "✨ issue はないよ ✨",
+	EmptyYourTurn:   "✨ 自分待ちのものはないよ! えらい ✨",
 	EmptyFilter:     "🔍 みつからなかった\n\nesc で絞り込み解除",
 	ErrorHint:       "😿 %s\n\nr でもう一回",
 	TooSmall:        "🌸 ちいさすぎるかも…\nもうすこし広げてね",
@@ -272,6 +288,7 @@ var japanese = Strings{
 	DetailComments:  "コメント",
 	DetailLabels:    "ラベル",
 	DetailReviewers: "レビュー依頼",
+	DetailAssignees: "担当",
 	DetailURL:       "URL",
 	FilesSuffix:     "(%d ファイル)",
 
@@ -280,6 +297,7 @@ var japanese = Strings{
 	CheckRun:   "CI 実行中",
 	CheckFail:  "CI 失敗",
 	CheckNone:  "CI なし",
+	IssueWord:  "イシュー",
 
 	ReviewApproved: "承認済み",
 	ReviewChanges:  "変更依頼",

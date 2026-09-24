@@ -29,6 +29,20 @@ func humanAge(d time.Duration, s Strings) string {
 	}
 }
 
+// issueIcon marks an issue in the list, where a pull request shows its check
+// and review state instead. It is deliberately not one of the colored circles
+// those use, so an issue never reads as a check result.
+const issueIcon = "🎫"
+
+// kindIcon is the glyphs at the head of a row: the ticket for an issue, and
+// the check and review state for a pull request.
+func kindIcon(pr gh.PR) string {
+	if pr.IsIssue {
+		return issueIcon
+	}
+	return checkIcon(pr.Check, pr.IsDraft) + reviewIcon(pr.Review)
+}
+
 // checkIcon maps a rolled-up CI state to a single glyph. Draft wins over the
 // check state: a draft's checks are not what you are scanning the list for.
 func checkIcon(c gh.Check, isDraft bool) string {

@@ -187,9 +187,10 @@ func (m Model) ruleView(mt metrics) string {
 func (m Model) tabsView(mt metrics) string {
 	counts := m.counts()
 
-	parts := make([]string, 0, len(allTabs))
-	for _, t := range allTabs {
-		label, count := t.label(m.s), fmt.Sprintf(" %d", counts[t])
+	tabs := m.tabs()
+	parts := make([]string, 0, len(tabs))
+	for _, t := range tabs {
+		label, count := t.label(m.s, m.issues), fmt.Sprintf(" %d", counts[t])
 		if t == m.tab {
 			parts = append(parts, m.theme.TabActive.Render("▸ "+label)+m.theme.TabSelected.Render(count))
 		} else {
@@ -308,7 +309,12 @@ func (m Model) emptyMessage() string {
 	case tabMine:
 		return m.s.EmptyMine
 	case tabReview:
+		if m.issues {
+			return m.s.EmptyYourTurn
+		}
 		return m.s.EmptyReview
+	case tabIssues:
+		return m.s.EmptyIssues
 	case tabElsewhere:
 		return m.s.EmptyElsewhere
 	case tabDraft:
@@ -348,10 +354,7 @@ func (m Model) rowView(pr gh.PR, selected bool, width int, compact bool) []strin
 		titleStyle, metaStyle = m.theme.TitleOn, m.theme.MetaOn
 	}
 
-	icons := checkIcon(pr.Check, pr.IsDraft)
-	if r := reviewIcon(pr.Review); r != "" {
-		icons += r
-	}
+	icons := kindIcon(pr)
 	number := m.theme.Number.Render(fmt.Sprintf("#%d", pr.Number))
 
 	if compact {
@@ -369,16 +372,18 @@ func (m Model) rowView(pr gh.PR, selected bool, width int, compact bool) []strin
 	if author == "" {
 		author = "?"
 	}
-	meta := strings.Join([]string{
+	meta := []string{
 		"👤 " + author,
 		"⏱ " + humanAge(m.now.Sub(pr.UpdatedAt), m.s),
-		"📈 " + m.theme.Additions.Render(fmt.Sprintf("+%d", pr.Additions)) +
-			"/" + m.theme.Deletions.Render(fmt.Sprintf("-%d", pr.Deletions)),
-		"💬 " + fmt.Sprintf("%d", pr.Comments),
-	}, "  ")
+	}
+	if !pr.IsIssue {
+		meta = append(meta, "📈 "+m.theme.Additions.Render(fmt.Sprintf("+%d", pr.Additions))+
+			"/"+m.theme.Deletions.Render(fmt.Sprintf("-%d", pr.Deletions)))
+	}
+	meta = append(meta, "💬 "+fmt.Sprintf("%d", pr.Comments))
 	repo := m.theme.RepoTag.Render(truncate(pr.Repo, max(width/3, 10)))
 
-	metaLine := "     " + metaStyle.Render(meta)
+	metaLine := "     " + metaStyle.Render(strings.Join(meta, "  "))
 	metaLine = pad(truncate(metaLine, width-ansi.StringWidth(repo)-1), width-ansi.StringWidth(repo)) + repo
 
 	return []string{head + title, metaLine}
@@ -401,9 +406,12 @@ func (m Model) detailContent(pr gh.PR) string {
 		fmt.Fprintf(&b, "%s %s\n", t.DetailKey.Render(key), t.Detail.Render(value))
 	}
 
-	state := checkIcon(pr.Check, pr.IsDraft) + " " + checkWord(pr.Check, pr.IsDraft, m.s)
-	if r := reviewIcon(pr.Review); r != "" {
-		state += "   " + r + " " + reviewWord(pr.Review, m.s)
+	state := issueIcon + " " + m.s.IssueWord
+	if !pr.IsIssue {
+		state = checkIcon(pr.Check, pr.IsDraft) + " " + checkWord(pr.Check, pr.IsDraft, m.s)
+		if r := reviewIcon(pr.Review); r != "" {
+			state += "   " + r + " " + reviewWord(pr.Review, m.s)
+		}
 	}
 	ago := func(at time.Time) string {
 		return fmt.Sprintf(m.s.AgeAgo, humanAge(m.now.Sub(at), m.s))
@@ -412,15 +420,20 @@ func (m Model) detailContent(pr gh.PR) string {
 	row(m.s.DetailAuthor, pr.Author)
 	row(m.s.DetailUpdated, ago(pr.UpdatedAt))
 	row(m.s.DetailCreated, ago(pr.CreatedAt))
-	row(m.s.DetailBranch, pr.HeadRef+" → "+pr.BaseRef)
-	row(m.s.DetailDiff, fmt.Sprintf("+%d / -%d  %s",
-		pr.Additions, pr.Deletions, fmt.Sprintf(m.s.FilesSuffix, pr.ChangedFiles)))
+	if !pr.IsIssue {
+		row(m.s.DetailBranch, pr.HeadRef+" → "+pr.BaseRef)
+		row(m.s.DetailDiff, fmt.Sprintf("+%d / -%d  %s",
+			pr.Additions, pr.Deletions, fmt.Sprintf(m.s.FilesSuffix, pr.ChangedFiles)))
+	}
 	row(m.s.DetailComments, strconv.Itoa(pr.Comments))
 	if len(pr.Labels) > 0 {
 		row(m.s.DetailLabels, strings.Join(pr.Labels, ", "))
 	}
 	if len(pr.Reviewers) > 0 {
 		row(m.s.DetailReviewers, strings.Join(pr.Reviewers, ", "))
+	}
+	if len(pr.Assignees) > 0 {
+		row(m.s.DetailAssignees, strings.Join(pr.Assignees, ", "))
 	}
 	row(m.s.DetailURL, pr.URL)
 

@@ -16,6 +16,7 @@ There is nothing to configure. prpr asks GitHub who you are and watches **your o
 - **Reaches outside them too.** Your pull requests to other people's projects, and review requests from orgs you are not in, are searched as well.
 - **Notices merges.** When a pull request leaves the list, prpr looks up how it ended and shows a farewell banner for a few seconds before it fades.
 - **Six tabs.** Everything, yours, awaiting your review, elsewhere (outside the watched owners), drafts, and bots, each with a live count. Pull requests opened by bots (dependabot, renovate and the like) live only in the bots tab, unless one asks you for a review by name.
+- **Issues too, if you like.** `--issues` (or `issues: true`) mixes open issues into the list, marked 🎫, searched the same way as pull requests. They get an issues tab of their own, and the review tab becomes "your turn": review requests plus the issues assigned to you.
 - **Keeps going when an org does not answer.** An org that refuses the search (SAML SSO the token is not authorized for, say) is named in the header, and the rest of the list stays up. When an owner has more open pull requests than one search returns, the header says so too.
 - **Filtering.** `/` searches titles, repositories, authors, `#number` and labels at once. Space-separated terms are ANDed.
 - **Detail pane.** `d` shows the branch, the diff stat, reviewers and the body. Side by side at 100 columns or wider, full width when narrower.
@@ -64,6 +65,7 @@ prpr
 | `--interval` | `1m` | Auto-refresh interval (minimum `5s`) |
 | `--timeout` | `20s` | Timeout for a single refresh |
 | `--lang` | `en` | Interface language: `en` or `ja` |
+| `--issues` | off | List open issues alongside the pull requests |
 | `--cache` | on | Show the last list at start-up while the first refresh runs. `--cache=false` turns it off |
 | `--config` | see below | Config file to read |
 | `--demo` | off | Run against a fixed fixture list instead of GitHub |
@@ -101,6 +103,9 @@ lang: ja
 authored: true
 review_requests: true
 
+# list open issues too, marked 🎫 (off by default; doubles the searches per refresh)
+issues: true
+
 # show the last list at start-up (on by default)
 cache: true
 ```
@@ -132,6 +137,7 @@ The cache lives in `$XDG_CACHE_HOME/prpr/cache.json`, or `~/.cache/prpr/cache.js
 | --- | --- |
 | 🟢 / 🟡 / 🔴 / ⚪ | Checks passing / running / failing / none |
 | 📝 | Draft |
+| 🎫 | Issue (with `--issues`) |
 | ✅ / 🔁 / 👀 | Approved / changes requested / review requested |
 
 ## Layout

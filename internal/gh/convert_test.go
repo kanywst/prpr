@@ -109,8 +109,8 @@ func TestToPRNullableFields(t *testing.T) {
 }
 
 func TestToPRSkipsNonPullRequests(t *testing.T) {
-	// search(type: ISSUE) also returns issues, which match none of the
-	// PullRequest inline fragment and so arrive zero-valued.
+	// search(type: ISSUE) can return node types that match neither inline
+	// fragment, and those arrive zero-valued.
 	if _, ok := decodeNode(t, `{}`).toPR(); ok {
 		t.Error("toPR accepted an empty node")
 	}
@@ -145,5 +145,26 @@ func TestToPRMarksBots(t *testing.T) {
 		if pr.IsBot != tt.want {
 			t.Errorf("toPR(%s).IsBot = %v, want %v", tt.author, pr.IsBot, tt.want)
 		}
+	}
+}
+
+func TestToPRReadsIssues(t *testing.T) {
+	n := decodeNode(t, `{
+		"__typename": "Issue",
+		"number": 140,
+		"title": "rate limiter ignores Retry-After",
+		"repository": {"nameWithOwner": "0-draft/api"},
+		"author": {"__typename": "User", "login": "alice"},
+		"assignees": {"nodes": [{"login": "kanywst"}, {"login": ""}]}
+	}`)
+	pr, ok := n.toPR()
+	if !ok || !pr.IsIssue {
+		t.Fatalf("toPR = %+v, %v; want an issue", pr, ok)
+	}
+	if len(pr.Assignees) != 1 || !pr.AssignedTo("KANYWST") || pr.AwaitsReviewFrom("kanywst") {
+		t.Errorf("assignees = %v: an assigned issue must read as assigned, not as a review", pr.Assignees)
+	}
+	if !pr.WaitsOn("kanywst") {
+		t.Error("WaitsOn is false for the assignee")
 	}
 }
