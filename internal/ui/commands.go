@@ -62,7 +62,8 @@ func tickCmd() tea.Cmd {
 //
 // It also confirms a cached login when the owners are pinned. Then a failed
 // lookup must not hold the pinned owners' search hostage, so it settles as an
-// unknown login, which the next refresh looks up again alongside the fetch.
+// empty ownersMsg, which fetches with the cached login left untouched and
+// leaves the confirmation to the next refresh.
 func (m Model) discoverOwnersCmd() tea.Cmd {
 	fetcher, timeout, exclude := m.fetcher, m.timeout, m.excludeOwners
 	pinned := len(m.pinnedOwners) > 0
