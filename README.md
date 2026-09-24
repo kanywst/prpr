@@ -20,6 +20,7 @@ There is nothing to configure. prpr asks GitHub who you are and watches **your o
 - **Filtering.** `/` searches titles, repositories, authors, `#number` and labels at once. Space-separated terms are ANDed.
 - **Detail pane.** `d` shows the branch, the diff stat, reviewers and the body. Side by side at 100 columns or wider, full width when narrower.
 - **Auto refresh.** Every 60 seconds by default, with a countdown in the header.
+- **Starts instantly.** The last list is cached on disk and shown the moment prpr opens, while the first refresh runs. Pull requests merged while it was closed still get their farewell.
 - **Stops when you are away.** Polling pauses while the terminal does not have focus.
 - **Mouse support.** Click to select, wheel to scroll.
 - **Light and dark.** The palette is derived from the terminal's reported background color.
@@ -63,6 +64,7 @@ prpr
 | `--interval` | `1m` | Auto-refresh interval (minimum `5s`) |
 | `--timeout` | `20s` | Timeout for a single refresh |
 | `--lang` | `en` | Interface language: `en` or `ja` |
+| `--cache` | on | Show the last list at start-up while the first refresh runs. `--cache=false` turns it off |
 | `--config` | see below | Config file to read |
 | `--demo` | off | Run against a fixed fixture list instead of GitHub |
 | `--version` | | Print the version and exit |
@@ -98,7 +100,12 @@ lang: ja
 # search your own PRs and your review requests outside the owners (both on by default)
 authored: true
 review_requests: true
+
+# show the last list at start-up (on by default)
+cache: true
 ```
+
+The cache lives in `$XDG_CACHE_HOME/prpr/cache.json`, or `~/.cache/prpr/cache.json`, readable only by you. It is shown with its age in the header until the first refresh lands, and anything merged while prpr was not running gets its farewell then.
 
 ### Keys
 
@@ -134,6 +141,7 @@ review_requests: true
 | `internal/gh` | The domain type (`PR`) and the GitHub GraphQL adapter |
 | `internal/browser` | The one OS-dependent side effect |
 | `internal/config` | The optional YAML config file |
+| `internal/cache` | The last list, kept on disk for the next start |
 | `internal/demo` | The fixture list behind `--demo` |
 | `internal/ui` | The Bubble Tea MVU loop, with pure helpers kept apart from state |
 | `main.go` | Flag parsing, config precedence and wiring |

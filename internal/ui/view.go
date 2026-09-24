@@ -113,8 +113,19 @@ func (m Model) headerView(mt metrics) string {
 	return pad(left, mt.innerW-ansi.StringWidth(status)) + status
 }
 
-// statusView is the right side of the header: what prpr is doing right now.
+// statusView is the right side of the header: what prpr is doing right now,
+// and how old the list is while it is still the cached one.
 func (m Model) statusView() string {
+	status := m.liveStatus()
+	if m.cachedAt.IsZero() || m.flash != "" {
+		return status
+	}
+	cached := m.theme.StatusWarm.Render(fmt.Sprintf(m.s.Cached, humanAge(m.now.Sub(m.cachedAt), m.s)))
+	return cached + "  " + status
+}
+
+// liveStatus is what prpr is doing right now.
+func (m Model) liveStatus() string {
 	switch {
 	case m.flash != "":
 		return m.theme.Status.Render("✨ " + m.flash)

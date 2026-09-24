@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/kanywst/prpr/internal/cache"
 	"github.com/kanywst/prpr/internal/gh"
 )
 
@@ -655,5 +656,102 @@ func TestCappedReviewRequestIsLookedUp(t *testing.T) {
 	}
 	if g, ok := msgs[0].(goneMsg); !ok || !g.capped {
 		t.Errorf("got %#v, want a capped goneMsg", msgs[0])
+	}
+}
+
+func TestCachedListShowsAtOnceAndWavesAtWhatMergedMeanwhile(t *testing.T) {
+	now := time.Now()
+	cached := samplePRs(now)
+	var saved []cache.Snapshot
+	f := &fakeFetcher{
+		me:     "kanywst",
+		orgs:   []string{"0-draft"},
+		states: map[string]gh.State{"0-draft/api#127": gh.StateMerged},
+	}
+	m := New(Config{
+		Fetcher: f, Interval: time.Minute, Timeout: time.Second, Authored: true,
+		Cached: &cache.Snapshot{
+			Me: "kanywst", Owners: []string{"kanywst", "0-draft"},
+			PRs: cached, At: now.Add(-3 * time.Hour),
+		},
+		SaveCache: func(s cache.Snapshot) error { saved = append(saved, s); return nil },
+	})
+	m.applyTheme(true)
+	m, _ = step(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	if !m.ready || len(m.visible) != len(cached) {
+		t.Fatalf("ready = %v, visible = %d; want the cached list on screen", m.ready, len(m.visible))
+	}
+	if !strings.Contains(m.statusView(), "3h") {
+		t.Errorf("status %q does not say how old the cache is", m.statusView())
+	}
+
+	// The cached login is confirmed before anything is searched as it.
+	var owners *ownersMsg
+	for _, msg := range drain(m.Init()) {
+		if o, ok := msg.(ownersMsg); ok {
+			owners = &o
+		}
+	}
+	if owners == nil {
+		t.Fatal("a cached start did not re-run discovery")
+	}
+	m, _ = step(t, m, *owners)
+
+	fresh := slices.DeleteFunc(slices.Clone(cached), func(pr gh.PR) bool { return pr.Number == 127 })
+	m, cmd := step(t, m, prsMsg{res: gh.Result{PRs: fresh}, at: now})
+	for _, msg := range drain(cmd) {
+		m, _ = step(t, m, msg)
+	}
+
+	if len(m.farewells) != 1 || m.farewells[0].pr.Number != 127 || m.farewells[0].state != gh.StateMerged {
+		t.Errorf("farewells = %+v, want #127 merged while prpr was closed", m.farewells)
+	}
+	if !m.cachedAt.IsZero() {
+		t.Error("the list is still marked cached after a refresh landed")
+	}
+	if len(saved) != 1 || len(saved[0].PRs) != len(fresh) || saved[0].Me != "kanywst" {
+		t.Errorf("saved = %+v, want the fresh list", saved)
+	}
+}
+
+func TestCachedListFromAnotherAccountIsNotWavedAt(t *testing.T) {
+	now := time.Now()
+	f := &fakeFetcher{me: "kanywst", pages: [][]gh.PR{nil}}
+	m := New(Config{
+		Fetcher: f, Interval: time.Minute, Timeout: time.Second, Authored: true,
+		Cached: &cache.Snapshot{
+			Me: "someone-else", Owners: []string{"someone-else"},
+			PRs: []gh.PR{{Number: 1, Repo: "someone-else/repo", Author: "someone-else", UpdatedAt: now}},
+			At:  now.Add(-time.Hour),
+		},
+	})
+
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst"}})
+	if len(m.prs) != 0 {
+		t.Fatalf("prs = %v, want the other account's list dropped", m.prs)
+	}
+	_, cmd := step(t, m, prsMsg{res: gh.Result{}, at: now})
+	if msgs := drain(cmd); len(msgs) != 0 {
+		t.Errorf("refresh emitted %v, want no farewell lookups", msgs)
+	}
+}
+
+func TestCachedListRespectsPinnedOwners(t *testing.T) {
+	now := time.Now()
+	m := New(Config{
+		Fetcher: &fakeFetcher{me: "kanywst", orgs: []string{"0-draft"}},
+		Owners:  []string{"kanywst"}, Interval: time.Minute, Timeout: time.Second,
+		Cached: &cache.Snapshot{
+			Me: "kanywst", Owners: []string{"kanywst", "0-draft"}, PRs: samplePRs(now), At: now,
+		},
+	})
+	// Only kanywst/prpr#12 is under the pinned owner.
+	if len(m.prs) != 1 || m.prs[0].Number != 12 {
+		t.Errorf("prs = %v, want only what the pinned owner covers", m.prs)
+	}
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+	if len(m.owners) != 1 || m.owners[0] != "kanywst" {
+		t.Errorf("owners = %v, discovery replaced the pinned owners", m.owners)
 	}
 }

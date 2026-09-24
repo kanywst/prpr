@@ -10,6 +10,7 @@ import (
 	"github.com/atotto/clipboard"
 
 	"github.com/kanywst/prpr/internal/browser"
+	"github.com/kanywst/prpr/internal/cache"
 	"github.com/kanywst/prpr/internal/gh"
 )
 
@@ -102,8 +103,10 @@ func (m Model) viewerCmd() tea.Cmd {
 // instead of sitting on an error until the program is restarted.
 func (m Model) refreshCmd() tea.Cmd {
 	// Discovery can legitimately leave no owners, when exclude_owners drops
-	// them all; knowing the login is what says it has run.
-	if len(m.owners) == 0 && m.me == "" {
+	// them all; knowing the login is what says it has run. A login read from
+	// the cache does not count until discovery has confirmed it: gh may have
+	// switched accounts since.
+	if m.unverified || (len(m.owners) == 0 && m.me == "") {
 		return m.discoverOwnersCmd()
 	}
 	if m.me == "" {
@@ -127,6 +130,20 @@ func (m Model) fetchCmd() tea.Cmd {
 			return errMsg{err}
 		}
 		return prsMsg{res: res, at: time.Now()}
+	}
+}
+
+// saveCmd stores a completed refresh for the next run. A failed save is not
+// worth interrupting anyone over: the cache is only ever a head start.
+func (m Model) saveCmd(prs []gh.PR, at time.Time) tea.Cmd {
+	if m.saveCache == nil {
+		return nil
+	}
+	save := m.saveCache
+	snap := cache.Snapshot{Me: m.me, Owners: slices.Clone(m.owners), PRs: prs, At: at}
+	return func() tea.Msg {
+		_ = save(snap)
+		return nil
 	}
 }
 

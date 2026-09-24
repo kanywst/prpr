@@ -45,6 +45,7 @@ type Strings struct {
 	Failed     string
 	Paused     string
 	OpenCount  string // one %d
+	Cached     string // one %s: how old the cached list is
 
 	AgeNow   string
 	AgeMin   string // one %d
@@ -144,6 +145,7 @@ var english = Strings{
 	Failed:     "😿 failed",
 	Paused:     "⏸ paused",
 	OpenCount:  "prpr · %d open",
+	Cached:     "📦 cached %s",
 
 	AgeNow:   "just now",
 	AgeMin:   "%dm",
@@ -235,6 +237,7 @@ var japanese = Strings{
 	Failed:     "😿 しっぱい",
 	Paused:     "⏸ 休憩中",
 	OpenCount:  "prpr · オープン %d 件",
+	Cached:     "📦 キャッシュ %s",
 
 	AgeNow:   "いま",
 	AgeMin:   "%d分",

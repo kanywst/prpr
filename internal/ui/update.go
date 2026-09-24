@@ -58,9 +58,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ownersMsg:
 		m.me = msg.me
-		if len(msg.owners) > 0 {
+		// Discovery also runs for pinned owners when the cache needs its
+		// login confirmed, and must not replace the owners that were asked
+		// for.
+		if len(msg.owners) > 0 && len(m.pinnedOwners) == 0 {
 			m.owners = msg.owners
 		}
+		m.unverified = false
+		m.dropUncovered()
 		m.recompute()
 		return m.startRefresh(m.fetchCmd())
 
@@ -154,42 +159,44 @@ func (m Model) refreshDue() bool {
 // previous list, or it may have been pushed past a scope's page cap, in which
 // case it only earns a farewell if it really did close. One held only by the
 // review-request search just means the review was done, and leaves quietly.
+//
+// The previous list may be the cached one from the last run, in which case
+// whatever was merged while prpr was not running gets its farewell now.
 func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
-	first := m.lastFetch.IsZero()
 	prs := slices.Clone(msg.res.PRs)
 
 	var cmds []tea.Cmd
-	if !first {
-		fresh := make(map[string]bool, len(prs))
-		for _, pr := range prs {
-			fresh[pr.Key()] = true
+	fresh := make(map[string]bool, len(prs))
+	for _, pr := range prs {
+		fresh[pr.Key()] = true
+	}
+	carried := false
+	for _, old := range m.prs {
+		switch {
+		case fresh[old.Key()]:
+		case msg.res.Unsure(old):
+			prs = append(prs, old)
+			carried = true
+		case msg.res.ReviewOnly(old) && !msg.res.Capped(old):
+		default:
+			cmds = append(cmds, m.stateCmd(old, msg.res.Capped(old)))
 		}
-		carried := false
-		for _, old := range m.prs {
-			switch {
-			case fresh[old.Key()]:
-			case msg.res.Unsure(old):
-				prs = append(prs, old)
-				carried = true
-			case msg.res.ReviewOnly(old) && !msg.res.Capped(old):
-			default:
-				cmds = append(cmds, m.stateCmd(old, msg.res.Capped(old)))
-			}
-		}
-		if carried {
-			gh.SortPRs(prs)
-		}
+	}
+	if carried {
+		gh.SortPRs(prs)
 	}
 
 	m.loading = false
 	m.ready = true
 	m.lastErr = nil
 	m.lastFetch = msg.at
+	m.cachedAt = time.Time{}
 	m.prs = prs
 	m.outcomes = msg.res.Outcomes
 	m.recompute()
 	m.applySize()
 
+	cmds = append(cmds, m.saveCmd(prs, msg.at))
 	return m, tea.Batch(cmds...)
 }
 
