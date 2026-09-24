@@ -5,6 +5,7 @@ package ui
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"charm.land/bubbles/v2/help"
@@ -13,6 +14,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
 
+	"github.com/kanywst/prpr/internal/cache"
 	"github.com/kanywst/prpr/internal/gh"
 )
 
@@ -52,6 +54,12 @@ type Config struct {
 	// ReviewRequests adds every open PR that asks the viewer for a review,
 	// wherever it lives, on top of the watched owners.
 	ReviewRequests bool
+	// Cached is the list the previous run left behind, shown until the first
+	// refresh lands. Nil starts from an empty screen.
+	Cached *cache.Snapshot
+	// SaveCache stores each completed refresh for the next run. Nil turns
+	// the cache off.
+	SaveCache func(cache.Snapshot) error
 }
 
 // Tunables that are deliberately not exposed as flags: they are timings the
@@ -116,8 +124,15 @@ type Model struct {
 	focused   bool
 	lastErr   error
 	lastFetch time.Time
-	flash     string
-	flashTill time.Time
+	// cachedAt is when the list on screen was fetched, while it is still the
+	// one a previous run left behind. It is zero once a refresh lands.
+	cachedAt time.Time
+	// unverified is set while me and owners come from the cache: they have
+	// to be confirmed by discovery before anything is searched as them.
+	unverified bool
+	saveCache  func(cache.Snapshot) error
+	flash      string
+	flashTill  time.Time
 
 	width, height int
 	theme         Theme
@@ -160,7 +175,7 @@ func New(cfg Config) Model {
 	vp.SoftWrap = true
 	vp.MouseWheelEnabled = true
 
-	return Model{
+	m := Model{
 		fetcher:        cfg.Fetcher,
 		interval:       cfg.Interval,
 		timeout:        cfg.Timeout,
@@ -179,8 +194,34 @@ func New(cfg Config) Model {
 		detail:         vp,
 		keys:           DefaultKeyMap(s),
 		filterKeys:     DefaultFilterKeyMap(s),
+		saveCache:      cfg.SaveCache,
 		now:            time.Now(),
 	}
+	if c := cfg.Cached; c != nil {
+		m.me = c.Me
+		if len(m.pinnedOwners) == 0 {
+			m.owners = c.Owners
+		}
+		m.prs = c.PRs
+		m.dropUncovered()
+		m.cachedAt = c.At
+		m.unverified = true
+		m.ready = true
+		m.recompute()
+	}
+	return m
+}
+
+// dropUncovered forgets pull requests that no scope of the next refresh would
+// return. It matters only for a cached list, fetched for a login, owners or
+// settings that may since have changed: whatever falls outside what is now
+// watched would otherwise vanish on the first refresh and be waved off as if
+// it had closed.
+func (m *Model) dropUncovered() {
+	scopes := m.scopes()
+	m.prs = slices.DeleteFunc(m.prs, func(pr gh.PR) bool {
+		return !slices.ContainsFunc(scopes, func(s gh.Scope) bool { return s.Covers(pr) })
+	})
 }
 
 // scopes is what the next refresh searches: the watched owners, plus the

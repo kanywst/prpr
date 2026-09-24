@@ -13,6 +13,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/kanywst/prpr/internal/cache"
 	"github.com/kanywst/prpr/internal/config"
 	"github.com/kanywst/prpr/internal/demo"
 	"github.com/kanywst/prpr/internal/gh"
@@ -62,6 +63,7 @@ func run(args []string) error {
 	interval := fs.Duration("interval", def.Interval, "auto-refresh interval")
 	timeout := fs.Duration("timeout", def.Timeout, "timeout for a single refresh")
 	lang := fs.String("lang", def.Lang, "interface language: en or ja")
+	useCache := fs.Bool("cache", def.Cache, "show the last list at start-up while the first refresh runs (--cache=false to turn off)")
 	configPath := fs.String("config", "", "config file (default $XDG_CONFIG_HOME/prpr/config.yaml, or ~/.config/prpr/config.yaml)")
 	demoMode := fs.Bool("demo", false, "run against a canned pull request list, for screenshots and recordings")
 	showVersion := fs.Bool("version", false, "print the version and exit")
@@ -90,6 +92,8 @@ func run(args []string) error {
 			cfg.Timeout = *timeout
 		case "lang":
 			cfg.Lang = *lang
+		case "cache":
+			cfg.Cache = *useCache
 		}
 	})
 	if err := cfg.Validate(); err != nil {
@@ -105,7 +109,7 @@ func run(args []string) error {
 		return err
 	}
 
-	model := ui.New(ui.Config{
+	uiCfg := ui.Config{
 		Fetcher:        fetcher,
 		Owners:         cfg.Owners,
 		ExcludeOwners:  cfg.ExcludeOwners,
@@ -114,7 +118,13 @@ func run(args []string) error {
 		Lang:           parsed,
 		Authored:       cfg.Authored,
 		ReviewRequests: cfg.ReviewRequests,
-	})
+	}
+	// The demo never touches the cache: its fixtures would overwrite the real
+	// list, and a recording must not start from whatever was cached.
+	if cfg.Cache && !*demoMode {
+		wireCache(&uiCfg)
+	}
+	model := ui.New(uiCfg)
 
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		return fmt.Errorf("the TUI stopped: %w", err)
@@ -133,6 +143,20 @@ func loadConfig(path string) (config.Config, error) {
 		return config.Config{}, err
 	}
 	return config.Load(path, false)
+}
+
+// wireCache hands the model the list the previous run left behind, and a way
+// to store the next one. A cache that cannot be located is skipped: it is a
+// head start, not something prpr needs to run.
+func wireCache(c *ui.Config) {
+	path, err := cache.Path()
+	if err != nil {
+		return
+	}
+	if snap, ok := cache.Load(path); ok {
+		c.Cached = &snap
+	}
+	c.SaveCache = func(s cache.Snapshot) error { return cache.Save(path, s) }
 }
 
 // newFetcher picks the live GitHub client, or the fixture one behind --demo.

@@ -39,6 +39,9 @@ type Config struct {
 	// ReviewRequests adds the PRs asking for your review anywhere, not just
 	// under the owners.
 	ReviewRequests bool `yaml:"review_requests"`
+	// Cache keeps the last list on disk, so the next start shows it at once
+	// while the first refresh is in flight.
+	Cache bool `yaml:"cache"`
 }
 
 // Default is the configuration prpr runs with when nothing overrides it.
@@ -49,6 +52,7 @@ func Default() Config {
 		Lang:           "en",
 		Authored:       true,
 		ReviewRequests: true,
+		Cache:          true,
 	}
 }
 
