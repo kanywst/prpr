@@ -111,8 +111,13 @@ func TestPathFollowsXDG(t *testing.T) {
 
 func TestLoadRejectsASecondDocument(t *testing.T) {
 	// Settings after a "---" would otherwise be ignored without a word.
-	if _, err := Load(writeConfig(t, "interval: 30s\n---\ninterval: 90s\n"), true); err == nil {
-		t.Error("Load accepted a file whose second document is never read")
+	for _, body := range []string{
+		"interval: 30s\n---\ninterval: 90s\n",
+		"interval: 30s\n---\n---\ninterval: 90s\n", // behind an empty one
+	} {
+		if _, err := Load(writeConfig(t, body), true); err == nil {
+			t.Errorf("Load(%q) accepted a document that is never read", body)
+		}
 	}
 	// A leading or trailing separator alone is still one document.
 	for _, body := range []string{"---\ninterval: 30s\n", "interval: 30s\n---\n", "interval: 30s\n...\n"} {
