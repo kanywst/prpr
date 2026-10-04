@@ -182,12 +182,14 @@ func (m Model) stateCmd(pr gh.PR, capped bool) tea.Cmd {
 	}
 }
 
-// openCmd opens a pull request in the browser.
+// openCmd opens a pull request in the browser. A failure is a notice rather
+// than an errMsg: errMsg means a refresh failed, and would end one that is in
+// flight and mark the list as stale.
 func (m Model) openCmd(url string) tea.Cmd {
-	opened := m.s.OpenedInBrowser
+	opened, failed := m.s.OpenedInBrowser, m.s.BrowserFailed
 	return func() tea.Msg {
 		if err := browser.Open(url); err != nil {
-			return errMsg{err}
+			return noticeMsg{failed}
 		}
 		return noticeMsg{opened}
 	}
