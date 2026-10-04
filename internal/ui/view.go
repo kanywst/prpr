@@ -147,7 +147,7 @@ func (m Model) headerView(mt metrics) string {
 // cells, dropping the cache age first, so a long notice or warning cannot
 // push the header past the frame.
 func (m Model) statusView(width int) string {
-	status := m.liveStatus()
+	status := m.liveStatus(width)
 	if !m.cachedAt.IsZero() && m.flash == "" {
 		cached := m.theme.StatusWarm.Render(fmt.Sprintf(m.s.Cached, humanAge(m.now.Sub(m.cachedAt), m.s)))
 		if both := cached + "  " + status; ansi.StringWidth(both) <= width {
@@ -157,8 +157,9 @@ func (m Model) statusView(width int) string {
 	return truncate(status, width)
 }
 
-// liveStatus is what prpr is doing right now.
-func (m Model) liveStatus() string {
+// liveStatus is what prpr is doing right now, in at most width cells where it
+// can choose what to give up.
+func (m Model) liveStatus(width int) string {
 	switch {
 	case m.flash != "":
 		return m.theme.Status.Render("✨ " + m.flash)
@@ -177,7 +178,12 @@ func (m Model) liveStatus() string {
 		}
 		countdown := m.theme.Status.Render(fmt.Sprintf("⟳ %ds", int(left.Seconds())+1))
 		if warn := m.warning(); warn != "" {
-			return m.theme.StatusWarm.Render(truncate(warn, maxWarningWidth)) + "  " + countdown
+			// The warning gives way before the countdown does.
+			room := min(maxWarningWidth, width-ansi.StringWidth(countdown)-2)
+			if room < 2 {
+				return countdown
+			}
+			return m.theme.StatusWarm.Render(truncate(warn, room)) + "  " + countdown
 		}
 		return countdown
 	}
