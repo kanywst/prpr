@@ -226,15 +226,15 @@ func (m Model) tabsView(mt metrics) string {
 
 // farewellView is the goodbye band: pull requests that just left the list.
 func (m Model) farewellView(mt metrics) string {
-	if len(m.farewells) == 0 {
+	if mt.farewells == 0 {
 		return ""
 	}
 
 	sparkles := []string{"✨", "🌟", "💫", "⭐"}
 	frame := sparkles[int(m.now.UnixNano()/int64(300*time.Millisecond))%len(sparkles)]
 
-	lines := make([]string, 0, len(m.farewells))
-	for _, f := range m.farewells {
+	lines := make([]string, 0, mt.farewells)
+	for _, f := range m.farewells[len(m.farewells)-mt.farewells:] {
 		icon, word := stateWord(f.state, m.s)
 		style := m.theme.Party
 		if m.now.Sub(f.born) > farewellFade {
