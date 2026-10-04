@@ -235,3 +235,30 @@ func TestFarewellsFitAShortTerminal(t *testing.T) {
 		}
 	}
 }
+
+func TestFilterCursorFollowsWideText(t *testing.T) {
+	// The terminal cursor must sit right after what was typed, counting wide
+	// runes as two cells, and follow the input's own cursor when it moves.
+	typed := func(q string) Model {
+		m := loadedModel(t, 80, 24, samplePRs(time.Now()))
+		m, _ = step(t, m, tea.KeyPressMsg{Code: '/', Text: "/"})
+		for _, r := range q {
+			m, _ = step(t, m, tea.KeyPressMsg{Code: r, Text: string(r)})
+		}
+		return m
+	}
+	for _, q := range []string{"abc", "日本", "🌸x"} {
+		c := typed(q).View().Cursor
+		if c == nil {
+			t.Fatalf("q=%q: no cursor in filter mode", q)
+		}
+		if want := ansi.StringWidth("┃ " + filterPrefix + q); c.X != want || c.Y != 22 {
+			t.Errorf("q=%q: cursor at (%d,%d), want (%d,22)", q, c.X, c.Y, want)
+		}
+	}
+
+	m, _ := step(t, typed("日本"), tea.KeyPressMsg{Code: tea.KeyLeft})
+	if want := ansi.StringWidth("┃ " + filterPrefix + "日"); m.View().Cursor.X != want {
+		t.Errorf("after moving left over 本, cursor X = %d, want %d", m.View().Cursor.X, want)
+	}
+}
