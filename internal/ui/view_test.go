@@ -204,3 +204,18 @@ func TestWarningNamesAFailedOwnerOnce(t *testing.T) {
 		t.Errorf("warning = %q, want 0-draft once and the lone issue failure named", got)
 	}
 }
+
+func TestLongStatusStaysInsideTheHeader(t *testing.T) {
+	// A notice, or the cache age next to a warning, can be wider than the
+	// room a narrow terminal leaves beside the logo.
+	for w := minWidth; w <= 80; w++ {
+		m := loadedModel(t, w, 30, samplePRs(time.Now()))
+		m, _ = step(t, m, noticeMsg{m.s.ClipboardFailed})
+		assertFits(t, m.render(), w, 30)
+
+		m = loadedModel(t, w, 30, samplePRs(time.Now()))
+		m.cachedAt = m.now.Add(-3 * time.Hour)
+		m.outcomes = []gh.Outcome{{Scope: gh.OwnerScope("0-draft"), Err: errors.New("SAML")}}
+		assertFits(t, m.render(), w, 30)
+	}
+}
