@@ -66,8 +66,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.me = msg.me
 		// Discovery also runs for pinned owners when the cache needs its
 		// login confirmed, and must not replace the owners that were asked
-		// for.
-		if len(msg.owners) > 0 && len(m.pinnedOwners) == 0 {
+		// for. Otherwise its answer replaces the cached owners even when it
+		// is empty: exclude_owners can drop them all, and the cached list may
+		// belong to another account.
+		if len(m.pinnedOwners) == 0 {
 			m.owners = msg.owners
 		}
 		m.unverified = false

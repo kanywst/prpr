@@ -761,6 +761,27 @@ func TestCachedListFromAnotherAccountIsNotWavedAt(t *testing.T) {
 	}
 }
 
+func TestEmptyDiscoveryReplacesCachedOwners(t *testing.T) {
+	// Discovery can legitimately find no owners (the viewer excluded, no
+	// orgs). That answer must replace the cached owners, which here belong to
+	// another account, rather than leave them searched under the new one.
+	now := time.Now()
+	m := New(Config{
+		Fetcher: &fakeFetcher{me: "kanywst"}, Interval: time.Minute, Timeout: time.Second,
+		ExcludeOwners: []string{"kanywst"},
+		Cached: &cache.Snapshot{
+			Me: "someone-else", Owners: []string{"someone-else", "their-org"},
+			PRs: []gh.PR{{Number: 1, Repo: "their-org/repo", Author: "x", UpdatedAt: now}},
+			At:  now.Add(-time.Hour),
+		},
+	})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: nil})
+	if len(m.owners) != 0 || len(m.scopes()) != 0 || len(m.prs) != 0 {
+		t.Errorf("owners=%v scopes=%v prs=%d, want the other account's owners and list gone",
+			m.owners, m.scopes(), len(m.prs))
+	}
+}
+
 func TestCachedListRespectsPinnedOwners(t *testing.T) {
 	now := time.Now()
 	m := New(Config{
