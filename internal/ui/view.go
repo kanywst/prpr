@@ -435,7 +435,11 @@ func (m Model) detailContent(pr gh.PR) string {
 		}
 	}
 	ago := func(at time.Time) string {
-		return fmt.Sprintf(m.s.AgeAgo, humanAge(m.now.Sub(at), m.s))
+		// "just now" already says when; "just now ago" does not read.
+		if d := m.now.Sub(at); d >= time.Minute {
+			return fmt.Sprintf(m.s.AgeAgo, humanAge(d, m.s))
+		}
+		return m.s.AgeNow
 	}
 	row(m.s.DetailState, state)
 	row(m.s.DetailAuthor, pr.Author)

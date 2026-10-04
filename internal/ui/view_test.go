@@ -262,3 +262,17 @@ func TestFilterCursorFollowsWideText(t *testing.T) {
 		t.Errorf("after moving left over 本, cursor X = %d, want %d", m.View().Cursor.X, want)
 	}
 }
+
+func TestDetailDoesNotSayJustNowAgo(t *testing.T) {
+	now := time.Now()
+	pr := gh.PR{Number: 1, Repo: "kanywst/prpr", Title: "t", Author: "x", UpdatedAt: now, CreatedAt: now.Add(-2 * time.Hour)}
+	m := loadedModel(t, 120, 40, []gh.PR{pr})
+	m, _ = step(t, m, tea.KeyPressMsg{Code: 'd', Text: "d"})
+	out := ansi.Strip(m.render())
+	if strings.Contains(out, m.s.AgeNow+" ago") {
+		t.Errorf("detail pane says %q", m.s.AgeNow+" ago")
+	}
+	if !strings.Contains(out, m.s.AgeNow) || !strings.Contains(out, "2h ago") {
+		t.Errorf("detail pane lost its ages:\n%s", out)
+	}
+}
