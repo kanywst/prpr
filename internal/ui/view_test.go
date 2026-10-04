@@ -276,3 +276,36 @@ func TestDetailDoesNotSayJustNowAgo(t *testing.T) {
 		t.Errorf("detail pane lost its ages:\n%s", out)
 	}
 }
+
+func TestFilterCursorFollowsScrolledText(t *testing.T) {
+	// Text wider than the input scrolls; the cursor must stay on the
+	// character it is in front of, wherever the window has scrolled to.
+	m := loadedModel(t, minWidth, 24, samplePRs(time.Now()))
+	m, _ = step(t, m, tea.KeyPressMsg{Code: '/', Text: "/"})
+	q := []rune("日本語のフィルタabcdefghijklmnopqrstuvwxyz0123456789")
+	for _, r := range q {
+		m, _ = step(t, m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	for moved := 0; moved <= 30; moved++ {
+		c := m.View().Cursor
+		line := []rune(ansi.Strip(strings.Split(m.render(), "\n")[c.Y]))
+		pos := m.filter.Position()
+		var under string
+		if pos < len(q) {
+			// The character drawn at the cursor's cell must be the one the
+			// input's cursor is in front of.
+			col := 0
+			for _, r := range line {
+				if col == c.X {
+					under = string(r)
+					break
+				}
+				col += ansi.StringWidth(string(r))
+			}
+			if under != string(q[pos]) {
+				t.Fatalf("after %d lefts: cursor at X=%d is on %q, want %q\n%s", moved, c.X, under, string(q[pos]), string(line))
+			}
+		}
+		m, _ = step(t, m, tea.KeyPressMsg{Code: tea.KeyLeft})
+	}
+}
