@@ -121,7 +121,7 @@ query($q: String!, $limit: Int!) {
         author { __typename login }
         repository { nameWithOwner }
         labels(first: 10) { nodes { name } }
-        reviewRequests(first: 20) {
+        reviewRequests(first: 100) {
           nodes {
             requestedReviewer {
               __typename
