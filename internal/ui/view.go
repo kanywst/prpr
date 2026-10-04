@@ -60,6 +60,12 @@ func (m Model) cursor2D() *tea.Cursor {
 	if c == nil {
 		return nil
 	}
+	// textinput places its cursor by rune count, which puts it short of the
+	// text by one cell per wide rune (CJK, emoji). Measure the cells instead,
+	// clamped to the input like textinput does once the text scrolls. The
+	// input has no prompt of its own.
+	before := string([]rune(m.filter.Value())[:m.filter.Position()])
+	c.X = min(ansi.StringWidth(before), m.filter.Width())
 	// Frame border + horizontal padding, then the filter's own label.
 	c.X += 2 + ansi.StringWidth(filterPrefix)
 	// The filter occupies the last content row, just above the bottom border.
