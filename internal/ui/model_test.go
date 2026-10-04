@@ -370,10 +370,15 @@ func TestBrowserFailureDoesNotDisturbARefresh(t *testing.T) {
 	// Opening a pull request can fail while a refresh is in flight. That is
 	// not a fetch error: the refresh must keep going and the list must not be
 	// marked as failed.
+	orig := openURL
+	openURL = func(string) error { return errors.New("LSOpenURLsWithRole() failed") }
+	t.Cleanup(func() { openURL = orig })
+
 	m := testModel(t, &fakeFetcher{})
 	m.loading = true
-
-	m, _ = step(t, m, noticeMsg{m.s.BrowserFailed})
+	for _, msg := range drain(m.openCmd("https://github.com/kanywst/prpr/pull/1")) {
+		m, _ = step(t, m, msg)
+	}
 	if !m.loading {
 		t.Error("a browser failure ended the refresh in flight")
 	}
