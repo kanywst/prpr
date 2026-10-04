@@ -57,12 +57,14 @@ func (n searchNode) toPR() (PR, bool) {
 		if rr.RequestedReviewer == nil {
 			continue
 		}
-		// A requested reviewer is either a User (login) or a Team (slug).
+		// A requested reviewer is either a User (login) or a Team, kept as
+		// org/team: the slash means a team can never be mistaken for a login
+		// that happens to share its slug.
 		switch {
 		case rr.RequestedReviewer.Login != "":
 			pr.Reviewers = append(pr.Reviewers, rr.RequestedReviewer.Login)
-		case rr.RequestedReviewer.Slug != "":
-			pr.Reviewers = append(pr.Reviewers, rr.RequestedReviewer.Slug)
+		case rr.RequestedReviewer.CombinedSlug != "":
+			pr.Reviewers = append(pr.Reviewers, rr.RequestedReviewer.CombinedSlug)
 		}
 	}
 

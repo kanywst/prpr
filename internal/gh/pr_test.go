@@ -38,13 +38,15 @@ func TestAuthoredBy(t *testing.T) {
 }
 
 func TestAwaitsReviewFrom(t *testing.T) {
-	pr := PR{Reviewers: []string{"Alice", "platform"}}
+	pr := PR{Reviewers: []string{"Alice", "0-draft/platform"}}
 
 	if !pr.AwaitsReviewFrom("alice") {
 		t.Error("AwaitsReviewFrom should be case-insensitive")
 	}
-	if !pr.AwaitsReviewFrom("platform") {
-		t.Error("team slugs should count as review requests")
+	// Team requests are not addressed to anyone by name, even someone whose
+	// login matches the team's slug.
+	if pr.AwaitsReviewFrom("platform") {
+		t.Error("a team request matched a login equal to its slug")
 	}
 	if pr.AwaitsReviewFrom("") {
 		t.Error("AwaitsReviewFrom(\"\") should be false")

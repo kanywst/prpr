@@ -2,6 +2,7 @@ package gh
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -38,7 +39,7 @@ func TestToPRFullNode(t *testing.T) {
 		"labels": {"nodes": [{"name": "enhancement"}, {"name": ""}]},
 		"reviewRequests": {"nodes": [
 			{"requestedReviewer": {"__typename": "User", "login": "alice"}},
-			{"requestedReviewer": {"__typename": "Team", "slug": "platform"}},
+			{"requestedReviewer": {"__typename": "Team", "combinedSlug": "0-draft/platform"}},
 			{"requestedReviewer": null}
 		]},
 		"commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "SUCCESS"}}}]}
@@ -71,8 +72,8 @@ func TestToPRFullNode(t *testing.T) {
 	if got, want := len(pr.Labels), 1; got != want {
 		t.Errorf("len(Labels) = %d, want %d (%v)", got, want, pr.Labels)
 	}
-	if got, want := len(pr.Reviewers), 2; got != want {
-		t.Errorf("len(Reviewers) = %d, want %d (%v)", got, want, pr.Reviewers)
+	if got, want := strings.Join(pr.Reviewers, ","), "alice,0-draft/platform"; got != want {
+		t.Errorf("Reviewers = %q, want %q", got, want)
 	}
 }
 
