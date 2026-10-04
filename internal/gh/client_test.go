@@ -160,3 +160,51 @@ func TestIssueScopes(t *testing.T) {
 		}
 	}
 }
+
+// stateGraphQL answers the state lookup the way GitHub does: a query that
+// selects Issue.state and PullRequest.state under one response key fails
+// validation, because the two fields are different enum types.
+type stateGraphQL string
+
+func (f stateGraphQL) RoundTrip(req *http.Request) (*http.Response, error) {
+	var body struct {
+		Query string `json:"query"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		return nil, err
+	}
+	payload := string(f)
+	if strings.Count(body.Query, "{ state }") > 1 {
+		payload = `{"errors":[{"message":"Fields \"state\" conflict because they return conflicting types \"IssueState!\" and \"PullRequestState!\"."}]}`
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(payload)),
+		Request:    req,
+	}, nil
+}
+
+func TestStateReadsPullRequestsAndIssues(t *testing.T) {
+	for _, tt := range []struct {
+		name, payload string
+		want          State
+	}{
+		{"merged pull request", `{"data":{"repository":{"issueOrPullRequest":{"prState":"MERGED"}}}}`, StateMerged},
+		{"closed issue", `{"data":{"repository":{"issueOrPullRequest":{"issueState":"CLOSED"}}}}`, StateClosed},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			gql, err := api.NewGraphQLClient(api.ClientOptions{Host: "github.com", AuthToken: "test", Transport: stateGraphQL(tt.payload)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := (&Client{gql: gql}).State(context.Background(), "kanywst/prpr", 1)
+			if err != nil {
+				t.Fatalf("State() error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("State() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
