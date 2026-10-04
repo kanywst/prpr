@@ -322,3 +322,27 @@ func TestNarrowHeaderKeepsTheCountdown(t *testing.T) {
 		}
 	}
 }
+
+func TestFilterCursorAtTheRightEdgeOfScrolledText(t *testing.T) {
+	// Moving right past the window scrolls it so it ends at the cursor, and
+	// the character the cursor is in front of is not drawn. The cursor must
+	// still sit just after the drawn text, not jump to the start.
+	m := loadedModel(t, minWidth, 24, samplePRs(time.Now()))
+	m, _ = step(t, m, tea.KeyPressMsg{Code: '/', Text: "/"})
+	for _, r := range "abcdefghijklmnopqrstuvwxyz0bc3456789" {
+		m, _ = step(t, m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	m, _ = step(t, m, tea.KeyPressMsg{Code: tea.KeyHome})
+	inputX := 2 + ansi.StringWidth(filterPrefix)
+	for range 30 {
+		m, _ = step(t, m, tea.KeyPressMsg{Code: tea.KeyRight})
+		drawn := strings.TrimRight(ansi.Strip(m.filter.View()), " ")
+		before := string([]rune(m.filter.Value())[:m.filter.Position()])
+		if !strings.HasSuffix(before, drawn) {
+			continue // the cursor is inside the window, covered elsewhere
+		}
+		if want := inputX + ansi.StringWidth(drawn); m.View().Cursor.X != want {
+			t.Fatalf("pos=%d: cursor X=%d, want %d (just after %q)", m.filter.Position(), m.View().Cursor.X, want, drawn)
+		}
+	}
+}
