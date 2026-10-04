@@ -94,14 +94,18 @@ func Load(path string, required bool) (Config, error) {
 	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
 		return cfg, fmt.Errorf("%s: %w", path, err)
 	}
-	// A second document after "---" would be ignored just as silently. A
-	// bare trailing separator decodes as an empty (null) document, which is
-	// harmless.
-	var extra yaml.Node
-	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) && (err != nil || !emptyDocument(&extra)) {
-		return cfg, fmt.Errorf("%s: only one YAML document is read; remove everything after the first ---", path)
+	// Any later document after a "---" would be ignored just as silently. A
+	// bare separator decodes as an empty (null) document, which is harmless.
+	for {
+		var extra yaml.Node
+		err := dec.Decode(&extra)
+		if errors.Is(err, io.EOF) {
+			return cfg, nil
+		}
+		if err != nil || !emptyDocument(&extra) {
+			return cfg, fmt.Errorf("%s: only one YAML document is allowed; settings after a --- separator are never read", path)
+		}
 	}
-	return cfg, nil
 }
 
 // emptyDocument reports whether n holds nothing but a null.
