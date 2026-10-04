@@ -401,9 +401,19 @@ func (m Model) handleClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	if mt.fullDetail {
 		return m, nil
 	}
+	// The list starts inside the border and padding; in the split layout
+	// everything right of it is the separator and the detail pane.
+	if mt.splitDetail && mouse.X > mt.listW+1 {
+		return m, nil
+	}
 
 	row := mouse.Y - m.listTop()
 	if row < 0 || row >= mt.listH {
+		return m, nil
+	}
+	// The list is padded below its last whole row; a click there is on
+	// nothing, not on the next row down, which is not drawn.
+	if row/mt.rowLines >= mt.rows {
 		return m, nil
 	}
 	idx := m.offset + row/mt.rowLines

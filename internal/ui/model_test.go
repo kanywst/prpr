@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -987,5 +988,55 @@ func TestIssuesTabHiddenWhenIssuesAreOff(t *testing.T) {
 	}
 	if seen[tabIssues] || tabAll.step(m.tabs(), -1) != tabBots {
 		t.Errorf("cycling visited %v", seen)
+	}
+}
+
+// manyPRs returns n pull requests, most recently updated first.
+func manyPRs(n int, now time.Time) []gh.PR {
+	out := make([]gh.PR, n)
+	for i := range out {
+		out[i] = gh.PR{
+			Number: 1000 - i, Title: fmt.Sprintf("pr %d", i), Repo: "kanywst/prpr",
+			Author: "alice", URL: fmt.Sprintf("https://github.com/kanywst/prpr/pull/%d", 1000-i),
+			UpdatedAt: now.Add(-time.Duration(i) * time.Minute),
+		}
+	}
+	return out
+}
+
+func TestClickBelowTheLastRowSelectsNothing(t *testing.T) {
+	// The list is padded below its last whole row. A click there must not
+	// select the next pull request down, which is not drawn.
+	m := loadedModel(t, 120, 40, manyPRs(30, time.Now()))
+	mt := m.metrics()
+	if mt.listH <= mt.rows*mt.rowLines {
+		t.Fatalf("setup: listH=%d rows=%d rowLines=%d leaves no padding", mt.listH, mt.rows, mt.rowLines)
+	}
+	y := m.listTop() + mt.listH - 1
+	m, _ = step(t, m, tea.MouseClickMsg{Button: tea.MouseLeft, X: 10, Y: y})
+	if m.cursor != 0 || m.offset != 0 {
+		t.Errorf("click on the padding moved cursor to %d (offset %d), want it left alone", m.cursor, m.offset)
+	}
+}
+
+func TestClickInTheSplitDetailPaneKeepsTheSelection(t *testing.T) {
+	m := loadedModel(t, 120, 40, manyPRs(5, time.Now()))
+	m, _ = step(t, m, tea.KeyPressMsg{Code: 'd', Text: "d"})
+	mt := m.metrics()
+	if !mt.splitDetail {
+		t.Fatal("setup: detail pane is not side by side")
+	}
+	before := m.detailKey
+	x := 2 + mt.listW + 3 + mt.detailW/2
+	y := m.listTop() + 2*mt.rowLines
+	m, _ = step(t, m, tea.MouseClickMsg{Button: tea.MouseLeft, X: x, Y: y})
+	if m.cursor != 0 || m.detailKey != before {
+		t.Errorf("click in the detail pane moved the selection: cursor=%d detail %q -> %q", m.cursor, before, m.detailKey)
+	}
+
+	// A click on the list side still selects.
+	m, _ = step(t, m, tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: y})
+	if m.cursor != 2 {
+		t.Errorf("click on list row 2 left cursor at %d", m.cursor)
 	}
 }
