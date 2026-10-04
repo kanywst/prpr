@@ -366,6 +366,25 @@ func TestRefreshPausesWhileUnfocused(t *testing.T) {
 	}
 }
 
+func TestBrowserFailureDoesNotDisturbARefresh(t *testing.T) {
+	// Opening a pull request can fail while a refresh is in flight. That is
+	// not a fetch error: the refresh must keep going and the list must not be
+	// marked as failed.
+	m := testModel(t, &fakeFetcher{})
+	m.loading = true
+
+	m, _ = step(t, m, noticeMsg{m.s.BrowserFailed})
+	if !m.loading {
+		t.Error("a browser failure ended the refresh in flight")
+	}
+	if m.lastErr != nil {
+		t.Errorf("a browser failure was recorded as a fetch error: %v", m.lastErr)
+	}
+	if m.flash != m.s.BrowserFailed {
+		t.Errorf("flash = %q, want %q", m.flash, m.s.BrowserFailed)
+	}
+}
+
 func TestErrorDefersRetryByOneInterval(t *testing.T) {
 	m := testModel(t, &fakeFetcher{})
 	m.owners = []string{"kanywst"}

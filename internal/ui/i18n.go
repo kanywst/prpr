@@ -100,6 +100,7 @@ type Strings struct {
 	ReviewRequired string
 
 	OpenedInBrowser string
+	BrowserFailed   string
 	CopiedURL       string
 	ClipboardFailed string
 
@@ -206,6 +207,7 @@ var english = Strings{
 	ReviewRequired: "review requested",
 
 	OpenedInBrowser: "opened in the browser",
+	BrowserFailed:   "the browser could not be opened",
 	CopiedURL:       "URL copied",
 	ClipboardFailed: "the clipboard was not available",
 
@@ -304,6 +306,7 @@ var japanese = Strings{
 	ReviewRequired: "レビュー待ち",
 
 	OpenedInBrowser: "ブラウザで開いたよ",
+	BrowserFailed:   "ブラウザを開けなかった",
 	CopiedURL:       "URL コピーしたよ",
 	ClipboardFailed: "クリップボードが使えなかった",
 
