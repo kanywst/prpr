@@ -390,6 +390,9 @@ type metrics struct {
 	rows           int
 	splitDetail    bool
 	fullDetail     bool
+
+	// farewells is how many goodbye lines fit above the list, newest kept.
+	farewells int
 }
 
 // metrics computes the layout. It is a pure function of the model so that
@@ -403,8 +406,14 @@ func (m Model) metrics() metrics {
 
 	// header + rule + tabs + blank, then the footer block and its blank line.
 	chrome := 4 + 1 + m.footerHeight()
-	if n := len(m.farewells); n > 0 {
-		chrome += n + 1
+	// The farewell band and its blank line come out of the list, which keeps
+	// at least one line: on a short terminal, only the newest goodbyes that
+	// still leave it room are shown.
+	mt.farewells = min(len(m.farewells), mt.innerH-chrome-2)
+	if mt.farewells > 0 {
+		chrome += mt.farewells + 1
+	} else {
+		mt.farewells = 0
 	}
 	mt.listH = max(mt.innerH-chrome, 1)
 

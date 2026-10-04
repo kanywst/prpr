@@ -219,3 +219,19 @@ func TestLongStatusStaysInsideTheHeader(t *testing.T) {
 		assertFits(t, m.render(), w, 30)
 	}
 }
+
+func TestFarewellsFitAShortTerminal(t *testing.T) {
+	// A full farewell band on a short terminal must give up its oldest lines
+	// rather than push the frame past the bottom of the screen.
+	for n := 1; n <= maxFarewells; n++ {
+		for h := minHeight; h <= 16; h++ {
+			m := loadedModel(t, 80, h, samplePRs(time.Now()))
+			for i := range n {
+				m, _ = step(t, m, goneMsg{pr: gh.PR{Number: 900 + i, Repo: "x/y", Title: "t"}, state: gh.StateMerged})
+			}
+			if got := len(strings.Split(m.render(), "\n")); got != h {
+				t.Errorf("%d farewells at height %d: rendered %d lines", n, h, got)
+			}
+		}
+	}
+}

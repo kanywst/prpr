@@ -432,7 +432,7 @@ func (m Model) handleClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 func (m Model) listTop() int {
 	// border, header, rule, tabs, blank
 	top := 1 + 4
-	if n := len(m.farewells); n > 0 {
+	if n := m.metrics().farewells; n > 0 {
 		top += n + 1
 	}
 	return top
