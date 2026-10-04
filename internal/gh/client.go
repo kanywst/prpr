@@ -31,10 +31,13 @@ func New() (*Client, error) {
 }
 
 const viewerQuery = `
-query {
+query($after: String) {
   viewer {
     login
-    organizations(first: 100) { nodes { login } }
+    organizations(first: 100, after: $after) {
+      nodes { login }
+      pageInfo { hasNextPage endCursor }
+    }
   }
 }`
 
@@ -45,24 +48,40 @@ type viewerResponse struct {
 			Nodes []struct {
 				Login string `json:"login"`
 			} `json:"nodes"`
+			PageInfo struct {
+				HasNextPage bool   `json:"hasNextPage"`
+				EndCursor   string `json:"endCursor"`
+			} `json:"pageInfo"`
 		} `json:"organizations"`
 	} `json:"viewer"`
 }
+
+// maxOrgPages bounds organization discovery, 100 per page, so a cursor that
+// never ends cannot spin forever.
+const maxOrgPages = 20
 
 // Viewer returns the authenticated login together with every organization it
 // belongs to. prpr uses this to discover which owners to watch, so the tool
 // works for anyone who runs it without per-user configuration.
 func (c *Client) Viewer(ctx context.Context) (login string, orgs []string, err error) {
-	var resp viewerResponse
-	if err := c.gql.DoWithContext(ctx, viewerQuery, nil, &resp); err != nil {
-		return "", nil, fmt.Errorf("could not resolve the logged-in user: %w", err)
-	}
-	orgs = make([]string, 0, len(resp.Viewer.Organizations.Nodes))
-	for _, n := range resp.Viewer.Organizations.Nodes {
-		orgs = append(orgs, n.Login)
+	vars := map[string]any{"after": nil}
+	for range maxOrgPages {
+		var resp viewerResponse
+		if err := c.gql.DoWithContext(ctx, viewerQuery, vars, &resp); err != nil {
+			return "", nil, fmt.Errorf("could not resolve the logged-in user: %w", err)
+		}
+		login = resp.Viewer.Login
+		for _, n := range resp.Viewer.Organizations.Nodes {
+			orgs = append(orgs, n.Login)
+		}
+		page := resp.Viewer.Organizations.PageInfo
+		if !page.HasNextPage || page.EndCursor == "" {
+			break
+		}
+		vars["after"] = page.EndCursor
 	}
 	sort.Strings(orgs)
-	return resp.Viewer.Login, orgs, nil
+	return login, orgs, nil
 }
 
 const searchQuery = `
