@@ -55,3 +55,40 @@ func TestOpenDoesNotWaitOnALingeringLauncher(t *testing.T) {
 		t.Errorf("Open() took %v, want about %v", took, settle)
 	}
 }
+
+func TestOpenReportsAFailureWhileAChildHoldsThePipe(t *testing.T) {
+	// A process the launcher started inherits stderr. The launcher's own exit
+	// status must still decide the result, without waiting on that process.
+	stub(t, "(echo boom >&2; sleep 5) & exit 3")
+	start := time.Now()
+	if err := Open("https://example.com"); err == nil {
+		t.Error("Open() = nil for a launcher that exited 3")
+	}
+	if took := time.Since(start); took > time.Second {
+		t.Errorf("Open() took %v waiting on a child holding the pipe", took)
+	}
+}
+
+func TestOpenSucceedsQuicklyWhileAChildHoldsThePipe(t *testing.T) {
+	stub(t, "sleep 5 & exit 0")
+	start := time.Now()
+	if err := Open("https://example.com"); err != nil {
+		t.Errorf("Open() = %v, want nil", err)
+	}
+	if took := time.Since(start); took > time.Second {
+		t.Errorf("Open() took %v waiting on a child holding the pipe", took)
+	}
+}
+
+func TestCappedBufferKeepsOnlyTheStart(t *testing.T) {
+	var b cappedBuffer
+	chunk := strings.Repeat("x", 1000)
+	for range 10 {
+		if n, err := b.Write([]byte(chunk)); n != len(chunk) || err != nil {
+			t.Fatalf("Write() = %d, %v; want %d, nil", n, err, len(chunk))
+		}
+	}
+	if got := len(b.String()); got != maxStderr {
+		t.Errorf("kept %d bytes, want %d", got, maxStderr)
+	}
+}
