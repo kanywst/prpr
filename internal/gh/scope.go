@@ -112,6 +112,10 @@ type Outcome struct {
 	// Total is how many pull requests matched, which exceeds the number
 	// returned when the search hit the page cap.
 	Total int
+	// Partial is set when the search answered but withheld some matches the
+	// token may not read. The pull requests it did return are in the result;
+	// the withheld ones are missing, not gone.
+	Partial bool
 }
 
 // Truncated reports whether the search matched more than it returned.
@@ -125,11 +129,12 @@ type Result struct {
 }
 
 // Unsure reports whether pr's absence from this result says nothing about
-// whether it is still open, because a scope that covers it failed. Such a
-// pull request should be kept from the previous refresh rather than waved off.
+// whether it is still open, because a scope that covers it failed or withheld
+// some of its matches. Such a pull request should be kept from the previous
+// refresh rather than waved off.
 func (r Result) Unsure(pr PR) bool {
 	for _, o := range r.Outcomes {
-		if o.Err != nil && o.Scope.Covers(pr) {
+		if (o.Err != nil || o.Partial) && o.Scope.Covers(pr) {
 			return true
 		}
 	}
