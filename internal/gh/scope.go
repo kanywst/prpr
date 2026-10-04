@@ -129,12 +129,23 @@ type Result struct {
 }
 
 // Unsure reports whether pr's absence from this result says nothing about
-// whether it is still open, because a scope that covers it failed or withheld
-// some of its matches. Such a pull request should be kept from the previous
-// refresh rather than waved off.
+// whether it is still open, because a scope that covers it failed. Such a
+// pull request should be kept from the previous refresh rather than waved off.
 func (r Result) Unsure(pr PR) bool {
 	for _, o := range r.Outcomes {
-		if (o.Err != nil || o.Partial) && o.Scope.Covers(pr) {
+		if o.Err != nil && o.Scope.Covers(pr) {
+			return true
+		}
+	}
+	return false
+}
+
+// Withheld reports whether pr may be one of the matches a partial scope that
+// covers it withheld. Its absence is a question to ask, not an answer: it
+// should be kept until a lookup says it closed.
+func (r Result) Withheld(pr PR) bool {
+	for _, o := range r.Outcomes {
+		if o.Partial && o.Scope.Covers(pr) {
 			return true
 		}
 	}

@@ -43,6 +43,10 @@ type goneMsg struct {
 	// search's page cap. If it turns out to be still open, nothing happened
 	// to it and there is nothing to wave at.
 	capped bool
+	// carried is set when the pull request was kept in the list because a
+	// partial search may have withheld it. It leaves only once the lookup
+	// says it closed; a failed lookup keeps it.
+	carried bool
 }
 
 // noticeMsg is a transient status line, used for things like "copied".
@@ -164,7 +168,7 @@ func (m Model) saveCmd(prs []gh.PR, at time.Time) tea.Cmd {
 }
 
 // stateCmd looks up how a vanished pull request ended.
-func (m Model) stateCmd(pr gh.PR, capped bool) tea.Cmd {
+func (m Model) stateCmd(pr gh.PR, capped, carried bool) tea.Cmd {
 	fetcher, timeout := m.fetcher, m.timeout
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -176,9 +180,9 @@ func (m Model) stateCmd(pr gh.PR, capped bool) tea.Cmd {
 			// is not worth interrupting the user with an error. It is not
 			// marked capped: that suppression is for a PR confirmed still
 			// open, and this one's state is unknown.
-			return goneMsg{pr: pr, state: gh.StateOpen}
+			return goneMsg{pr: pr, state: gh.StateOpen, carried: carried}
 		}
-		return goneMsg{pr: pr, state: state, capped: capped}
+		return goneMsg{pr: pr, state: state, capped: capped, carried: carried}
 	}
 }
 

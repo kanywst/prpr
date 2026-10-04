@@ -662,7 +662,7 @@ func (stateErrFetcher) State(context.Context, string, int) (gh.State, error) {
 
 func TestCappedPRWithFailedLookupStillWaves(t *testing.T) {
 	m := testModel(t, &stateErrFetcher{})
-	msgs := drain(m.stateCmd(gh.PR{Repo: "o/r", Number: 1}, true))
+	msgs := drain(m.stateCmd(gh.PR{Repo: "o/r", Number: 1}, true, false))
 	if len(msgs) != 1 {
 		t.Fatalf("got %d messages, want 1", len(msgs))
 	}
@@ -1038,5 +1038,38 @@ func TestClickInTheSplitDetailPaneKeepsTheSelection(t *testing.T) {
 	m, _ = step(t, m, tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: y})
 	if m.cursor != 2 {
 		t.Errorf("click on list row 2 left cursor at %d", m.cursor)
+	}
+}
+
+func TestWithheldPRIsKeptUntilALookupSaysItClosed(t *testing.T) {
+	// A partial search (one hit in an org refusing the token) may have
+	// withheld any pull request it covers. Those are kept and asked about:
+	// one still open stays without a farewell, one that merged leaves with
+	// one, and the header says the search was partial.
+	now := time.Now()
+	merged := gh.PR{Repo: "kanywst/prpr", Number: 1, Author: "kanywst", UpdatedAt: now}
+	open := gh.PR{Repo: "kanywst/prpr", Number: 2, Author: "kanywst", UpdatedAt: now.Add(-time.Minute)}
+	f := &fakeFetcher{me: "kanywst", states: map[string]gh.State{merged.Key(): gh.StateMerged}}
+	m := testModel(t, f)
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst"}})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: []gh.PR{merged, open}}, at: now})
+
+	partial := []gh.Outcome{{Scope: gh.OwnerScope("kanywst"), Partial: true}}
+	m, cmd := step(t, m, prsMsg{res: gh.Result{Outcomes: partial}, at: now.Add(time.Minute)})
+	if len(m.prs) != 2 {
+		t.Fatalf("prs = %v, want both kept while their fate is unknown", m.prs)
+	}
+	if !strings.Contains(m.warning(), "kanywst") {
+		t.Errorf("warning() = %q, want it to name the partial scope", m.warning())
+	}
+
+	for _, msg := range drain(cmd) {
+		m, _ = step(t, m, msg)
+	}
+	if len(m.prs) != 1 || m.prs[0].Key() != open.Key() {
+		t.Errorf("prs = %v, want only the still-open one left", m.prs)
+	}
+	if len(m.farewells) != 1 || m.farewells[0].pr.Key() != merged.Key() {
+		t.Errorf("farewells = %v, want one for the merged pull request", m.farewells)
 	}
 }
