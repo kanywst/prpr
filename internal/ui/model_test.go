@@ -1073,3 +1073,24 @@ func TestWithheldPRIsKeptUntilALookupSaysItClosed(t *testing.T) {
 		t.Errorf("farewells = %v, want one for the merged pull request", m.farewells)
 	}
 }
+
+func TestOverlappingLookupsWaveAtAWithheldPROnce(t *testing.T) {
+	// A second refresh can land before the first lookup returns and ask
+	// again. Both answers say merged; only one farewell is due.
+	now := time.Now()
+	merged := gh.PR{Repo: "kanywst/prpr", Number: 1, Author: "kanywst", UpdatedAt: now}
+	f := &fakeFetcher{me: "kanywst", states: map[string]gh.State{merged.Key(): gh.StateMerged}}
+	m := testModel(t, f)
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst"}})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: []gh.PR{merged}}, at: now})
+
+	partial := []gh.Outcome{{Scope: gh.OwnerScope("kanywst"), Partial: true}}
+	m, first := step(t, m, prsMsg{res: gh.Result{Outcomes: partial}, at: now.Add(time.Minute)})
+	m, second := step(t, m, prsMsg{res: gh.Result{Outcomes: partial}, at: now.Add(2 * time.Minute)})
+	for _, msg := range append(drain(first), drain(second)...) {
+		m, _ = step(t, m, msg)
+	}
+	if len(m.farewells) != 1 {
+		t.Errorf("got %d farewells, want 1", len(m.farewells))
+	}
+}

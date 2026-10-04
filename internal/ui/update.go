@@ -232,6 +232,11 @@ func (m Model) handleGone(msg goneMsg) (tea.Model, tea.Cmd) {
 	}
 	var save tea.Cmd
 	if msg.carried {
+		// A refresh that landed before this lookup returned asked again, and
+		// the earlier answer has already taken it off the list.
+		if !slices.ContainsFunc(m.prs, func(p gh.PR) bool { return p.Key() == msg.pr.Key() }) {
+			return m, nil
+		}
 		// It was kept on the list while its fate was unknown; now it is known.
 		m.prs = slices.DeleteFunc(slices.Clone(m.prs), func(p gh.PR) bool { return p.Key() == msg.pr.Key() })
 		m.recompute()
