@@ -60,17 +60,39 @@ func (m Model) cursor2D() *tea.Cursor {
 	if c == nil {
 		return nil
 	}
-	// textinput places its cursor by rune count, which puts it short of the
-	// text by one cell per wide rune (CJK, emoji). Measure the cells instead,
-	// clamped to the input like textinput does once the text scrolls. The
-	// input has no prompt of its own.
-	before := string([]rune(m.filter.Value())[:m.filter.Position()])
-	c.X = min(ansi.StringWidth(before), m.filter.Width())
+	c.X = m.filterCursorX()
 	// Frame border + horizontal padding, then the filter's own label.
 	c.X += 2 + ansi.StringWidth(filterPrefix)
 	// The filter occupies the last content row, just above the bottom border.
 	c.Y += m.height - 2
 	return c
+}
+
+// filterCursorX is the cell the cursor sits on within the filter input.
+//
+// textinput places its cursor by rune count and ignores how far its text has
+// scrolled, which puts the cursor short by one cell per wide rune (CJK, emoji)
+// and off the text once it scrolls. Its scroll offset is private, so recover
+// it from what the input draws: the leftmost start the drawn text can begin
+// at that ends the window on the cursor's own text. For anything but long
+// runs of one repeated character that start is unique. The input has no
+// prompt of its own.
+func (m Model) filterCursorX() int {
+	runes := []rune(m.filter.Value())
+	pos := min(m.filter.Position(), len(runes))
+	drawn := ansi.Strip(m.filter.View())
+	for k := 0; k <= pos; k++ {
+		before := string(runes[k:pos])
+		x := ansi.StringWidth(before)
+		if x > m.filter.Width() || !strings.HasPrefix(drawn, before) {
+			continue
+		}
+		if pos < len(runes) && !strings.HasPrefix(drawn[len(before):], string(runes[pos])) {
+			continue
+		}
+		return x
+	}
+	return min(ansi.StringWidth(string(runes[:pos])), m.filter.Width())
 }
 
 // render draws the framed UI.
