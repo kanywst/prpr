@@ -309,3 +309,16 @@ func TestFilterCursorFollowsScrolledText(t *testing.T) {
 		m, _ = step(t, m, tea.KeyPressMsg{Code: tea.KeyLeft})
 	}
 }
+
+func TestNarrowHeaderKeepsTheCountdown(t *testing.T) {
+	// When a warning and the countdown do not both fit, the warning is the
+	// one that gets cut.
+	for w := minWidth; w <= 80; w++ {
+		m := loadedModel(t, w, 30, samplePRs(time.Now()))
+		m.outcomes = []gh.Outcome{{Scope: gh.OwnerScope("a-very-long-organization-name"), Err: errors.New("SAML")}}
+		header := ansi.Strip(strings.Split(m.render(), "\n")[1])
+		if !strings.Contains(header, "⟳") {
+			t.Errorf("w=%d: countdown missing from %q", w, header)
+		}
+	}
+}
