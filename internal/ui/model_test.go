@@ -1094,3 +1094,18 @@ func TestOverlappingLookupsWaveAtAWithheldPROnce(t *testing.T) {
 		t.Errorf("got %d farewells, want 1", len(m.farewells))
 	}
 }
+
+func TestWheelOverTheSeparatorScrollsTheDetailPane(t *testing.T) {
+	// The wheel and a click must agree on where the list ends: the first
+	// separator column is not the list.
+	m := loadedModel(t, 120, 40, manyPRs(5, time.Now()))
+	m, _ = step(t, m, tea.KeyPressMsg{Code: 'd', Text: "d"})
+	mt := m.metrics()
+	if !mt.splitDetail {
+		t.Fatal("setup: detail pane is not side by side")
+	}
+	m, _ = step(t, m, tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: mt.listW + 2, Y: m.listTop()})
+	if m.cursor != 0 {
+		t.Errorf("wheel on the separator moved the list cursor to %d", m.cursor)
+	}
+}
