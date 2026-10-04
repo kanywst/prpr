@@ -242,3 +242,55 @@ func TestSearchFailsOnAWholeQueryError(t *testing.T) {
 		t.Fatal("Search() = nil error for a rate-limited query")
 	}
 }
+
+// orgPages answers the viewer query one organization page at a time, keyed by
+// the cursor it was asked for.
+type orgPages map[string]string
+
+func (f orgPages) RoundTrip(req *http.Request) (*http.Response, error) {
+	var body struct {
+		Variables struct {
+			After *string `json:"after"`
+		} `json:"variables"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		return nil, err
+	}
+	after := ""
+	if body.Variables.After != nil {
+		after = *body.Variables.After
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(f[after])),
+		Request:    req,
+	}, nil
+}
+
+func TestViewerFollowsEveryOrganizationPage(t *testing.T) {
+	// Someone in more than 100 organizations gets them over several pages;
+	// stopping at the first would silently drop the rest from discovery.
+	page := func(next string, orgs ...string) string {
+		nodes := make([]string, len(orgs))
+		for i, o := range orgs {
+			nodes[i] = fmt.Sprintf(`{"login":%q}`, o)
+		}
+		return fmt.Sprintf(`{"data":{"viewer":{"login":"kanywst","organizations":{"nodes":[%s],"pageInfo":{"hasNextPage":%t,"endCursor":%q}}}}}`,
+			strings.Join(nodes, ","), next != "", next)
+	}
+	gql, err := api.NewGraphQLClient(api.ClientOptions{Host: "github.com", AuthToken: "test", Transport: orgPages{
+		"":   page("c1", "b-org", "a-org"),
+		"c1": page("", "c-org"),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	login, orgs, err := (&Client{gql: gql}).Viewer(context.Background())
+	if err != nil {
+		t.Fatalf("Viewer() error: %v", err)
+	}
+	if login != "kanywst" || strings.Join(orgs, ",") != "a-org,b-org,c-org" {
+		t.Errorf("Viewer() = %q, %v; want kanywst, [a-org b-org c-org]", login, orgs)
+	}
+}
