@@ -126,7 +126,7 @@ query($q: String!, $limit: Int!) {
             requestedReviewer {
               __typename
               ... on User { login }
-              ... on Team { slug }
+              ... on Team { combinedSlug }
             }
           }
         }
@@ -185,9 +185,9 @@ type searchNode struct {
 	ReviewRequests struct {
 		Nodes []struct {
 			RequestedReviewer *struct {
-				Typename string `json:"__typename"`
-				Login    string `json:"login"`
-				Slug     string `json:"slug"`
+				Typename     string `json:"__typename"`
+				Login        string `json:"login"`
+				CombinedSlug string `json:"combinedSlug"`
 			} `json:"requestedReviewer"`
 		} `json:"nodes"`
 	} `json:"reviewRequests"`
