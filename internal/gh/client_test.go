@@ -179,10 +179,11 @@ func TestSearchKeepsAPartialAnswer(t *testing.T) {
 		t.Fatalf("got %d PRs, want the 2 readable ones", len(res.PRs))
 	}
 	// The withheld one may be any pull request the scope covers, so a pull
-	// request missing from this answer must not be waved off as closed.
+	// request missing from this answer must be asked about, not waved off.
 	gone := PR{Number: 9, Repo: "carol/secret", Author: "kanywst"}
-	if !res.Unsure(gone) {
-		t.Error("Unsure() = false for a pull request a partial scope covers")
+	if !res.Withheld(gone) || res.Unsure(gone) {
+		t.Errorf("Withheld()=%v Unsure()=%v for a pull request a partial scope covers; want withheld, not unsure",
+			res.Withheld(gone), res.Unsure(gone))
 	}
 }
 

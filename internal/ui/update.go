@@ -193,9 +193,18 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 		case msg.res.Unsure(old):
 			prs = append(prs, old)
 			carried = true
+		case msg.res.Withheld(old):
+			// Kept, but asked about: a partial answer can repeat on every
+			// refresh, and carrying without asking would keep a merged pull
+			// request on the list for good.
+			prs = append(prs, old)
+			carried = true
+			if len(cmds) < lookups {
+				cmds = append(cmds, m.stateCmd(old, false, true))
+			}
 		case msg.res.ReviewOnly(old) && !msg.res.Capped(old):
 		case len(cmds) < lookups:
-			cmds = append(cmds, m.stateCmd(old, msg.res.Capped(old)))
+			cmds = append(cmds, m.stateCmd(old, msg.res.Capped(old), false))
 		}
 	}
 	if carried {
@@ -218,15 +227,22 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 
 // handleGone turns a vanished pull request into a goodbye banner.
 func (m Model) handleGone(msg goneMsg) (tea.Model, tea.Cmd) {
-	if msg.capped && msg.state == gh.StateOpen {
+	if (msg.capped || msg.carried) && msg.state == gh.StateOpen {
 		return m, nil
+	}
+	var save tea.Cmd
+	if msg.carried {
+		// It was kept on the list while its fate was unknown; now it is known.
+		m.prs = slices.DeleteFunc(slices.Clone(m.prs), func(p gh.PR) bool { return p.Key() == msg.pr.Key() })
+		m.recompute()
+		save = m.saveCmd(m.prs, m.lastFetch)
 	}
 	m.farewells = append(m.farewells, farewell{pr: msg.pr, state: msg.state, born: m.now})
 	if len(m.farewells) > maxFarewells {
 		m.farewells = m.farewells[len(m.farewells)-maxFarewells:]
 	}
 	m.applySize()
-	return m, nil
+	return m, save
 }
 
 // handleKey dispatches a key press to filter mode or list mode.

@@ -106,6 +106,8 @@ type Strings struct {
 
 	WarnFailed string // one %s: the scopes that could not be searched
 	WarnCapped string // %s: the scope, %d: how many it returned, %d: how many matched
+	// WarnPartial takes one %s: the scopes that withheld some of their matches.
+	WarnPartial string
 
 	FilterPlaceholder string
 
@@ -211,8 +213,9 @@ var english = Strings{
 	CopiedURL:       "URL copied",
 	ClipboardFailed: "the clipboard was not available",
 
-	WarnFailed: "⚠ skipped %s",
-	WarnCapped: "⚠ %s: %d of %d",
+	WarnFailed:  "⚠ skipped %s",
+	WarnCapped:  "⚠ %s: %d of %d",
+	WarnPartial: "⚠ some of %s hidden",
 
 	FilterPlaceholder: "title / repo / author / #number",
 
@@ -310,8 +313,9 @@ var japanese = Strings{
 	CopiedURL:       "URL コピーしたよ",
 	ClipboardFailed: "クリップボードが使えなかった",
 
-	WarnFailed: "⚠ %s は取得失敗",
-	WarnCapped: "⚠ %s は %d/%d 件のみ",
+	WarnFailed:  "⚠ %s は取得失敗",
+	WarnCapped:  "⚠ %s は %d/%d 件のみ",
+	WarnPartial: "⚠ %s は一部見えない",
 
 	FilterPlaceholder: "タイトル / リポ / 作者 / #番号",
 

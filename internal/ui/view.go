@@ -198,10 +198,12 @@ func (m Model) failed(kind gh.ScopeKind, login string, issues bool) bool {
 // or failing that, scopes that hit the page cap. Failures come first because
 // they hide whole owners, where a cap only hides the oldest pull requests.
 func (m Model) warning() string {
-	var failed []string
+	var failed, partial []string
 	var capped *gh.Outcome
 	for i, o := range m.outcomes {
 		switch {
+		case o.Partial:
+			partial = append(partial, o.Scope.String())
 		case o.Err != nil && o.Scope.Issues && m.failed(o.Scope.Kind, o.Scope.Login, false):
 			// An org refusing the token fails both its searches; naming it
 			// once is enough.
@@ -214,6 +216,8 @@ func (m Model) warning() string {
 	switch {
 	case len(failed) > 0:
 		return fmt.Sprintf(m.s.WarnFailed, strings.Join(failed, ", "))
+	case len(partial) > 0:
+		return fmt.Sprintf(m.s.WarnPartial, strings.Join(partial, ", "))
 	case capped != nil:
 		return fmt.Sprintf(m.s.WarnCapped, capped.Scope, gh.SearchLimit, capped.Total)
 	default:
