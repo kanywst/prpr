@@ -622,6 +622,18 @@ func TestNoScopesDoesNotSpinForever(t *testing.T) {
 	}
 }
 
+func TestEmptyRefreshClearsAnEarlierError(t *testing.T) {
+	// A start-up that could not reach GitHub records an error. The retry that
+	// then settles with nothing to search has succeeded, and must not leave
+	// the header saying the refresh failed.
+	m := testModel(t, &fakeFetcher{})
+	m, _ = step(t, m, errMsg{errors.New("offline")})
+	m, _ = step(t, m, ownersMsg{me: "kanywst"})
+	if m.lastErr != nil {
+		t.Errorf("lastErr = %v after a successful empty refresh, want nil", m.lastErr)
+	}
+}
+
 func TestSubmittedOutsideReviewLeavesQuietly(t *testing.T) {
 	now := time.Now()
 	m := testModel(t, &fakeFetcher{})

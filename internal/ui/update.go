@@ -142,6 +142,7 @@ func (m Model) startRefresh(cmd tea.Cmd) (Model, tea.Cmd) {
 	if cmd == nil {
 		m.loading = false
 		m.ready = true
+		m.lastErr = nil
 		m.lastFetch = m.now
 		m.cachedAt = time.Time{}
 		return m, m.saveCmd(nil, m.now)
