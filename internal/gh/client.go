@@ -313,15 +313,12 @@ func SortPRs(prs []PR) {
 	})
 }
 
-// stateQuery aliases the two state fields: Issue.state and PullRequest.state
-// are different enum types, and GraphQL rejects the whole query when one
-// response key would hold either.
 const stateQuery = `
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     issueOrPullRequest(number: $number) {
-      ... on Issue { issueState: state }
-      ... on PullRequest { prState: state }
+      ... on Issue { state }
+      ... on PullRequest { state }
     }
   }
 }`
@@ -329,8 +326,7 @@ query($owner: String!, $name: String!, $number: Int!) {
 type stateResponse struct {
 	Repository struct {
 		IssueOrPullRequest struct {
-			IssueState string `json:"issueState"`
-			PRState    string `json:"prState"`
+			State string `json:"state"`
 		} `json:"issueOrPullRequest"`
 	} `json:"repository"`
 }
@@ -349,9 +345,5 @@ func (c *Client) State(ctx context.Context, repo string, number int) (State, err
 	if err := c.gql.DoWithContext(ctx, stateQuery, vars, &resp); err != nil {
 		return "", fmt.Errorf("could not read the state of %s#%d: %w", repo, number, err)
 	}
-	got := resp.Repository.IssueOrPullRequest
-	if got.PRState != "" {
-		return State(got.PRState), nil
-	}
-	return State(got.IssueState), nil
+	return State(resp.Repository.IssueOrPullRequest.State), nil
 }
