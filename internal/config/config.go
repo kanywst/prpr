@@ -94,7 +94,24 @@ func Load(path string, required bool) (Config, error) {
 	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
 		return cfg, fmt.Errorf("%s: %w", path, err)
 	}
+	// A second document after "---" would be ignored just as silently. A
+	// bare trailing separator decodes as an empty (null) document, which is
+	// harmless.
+	var extra yaml.Node
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) && (err != nil || !emptyDocument(&extra)) {
+		return cfg, fmt.Errorf("%s: only one YAML document is read; remove everything after the first ---", path)
+	}
 	return cfg, nil
+}
+
+// emptyDocument reports whether n holds nothing but a null.
+func emptyDocument(n *yaml.Node) bool {
+	for _, c := range n.Content {
+		if c.Kind != yaml.ScalarNode || c.Tag != "!!null" {
+			return false
+		}
+	}
+	return true
 }
 
 // Validate rejects settings prpr cannot run with.
