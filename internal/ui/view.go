@@ -102,7 +102,7 @@ func (m Model) tooSmallView() string {
 // headerView is the logo, the watched owners, and the refresh status.
 func (m Model) headerView(mt metrics) string {
 	logo := m.theme.Logo.Render("🌸 prpr")
-	status := m.statusView()
+	status := m.statusView(mt.innerW - ansi.StringWidth(logo) - 2)
 
 	room := mt.innerW - ansi.StringWidth(logo) - ansi.StringWidth(status) - 2
 	owners := ""
@@ -115,14 +115,18 @@ func (m Model) headerView(mt metrics) string {
 }
 
 // statusView is the right side of the header: what prpr is doing right now,
-// and how old the list is while it is still the cached one.
-func (m Model) statusView() string {
+// and how old the list is while it is still the cached one. It fits in width
+// cells, dropping the cache age first, so a long notice or warning cannot
+// push the header past the frame.
+func (m Model) statusView(width int) string {
 	status := m.liveStatus()
-	if m.cachedAt.IsZero() || m.flash != "" {
-		return status
+	if !m.cachedAt.IsZero() && m.flash == "" {
+		cached := m.theme.StatusWarm.Render(fmt.Sprintf(m.s.Cached, humanAge(m.now.Sub(m.cachedAt), m.s)))
+		if both := cached + "  " + status; ansi.StringWidth(both) <= width {
+			return both
+		}
 	}
-	cached := m.theme.StatusWarm.Render(fmt.Sprintf(m.s.Cached, humanAge(m.now.Sub(m.cachedAt), m.s)))
-	return cached + "  " + status
+	return truncate(status, width)
 }
 
 // liveStatus is what prpr is doing right now.

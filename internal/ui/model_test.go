@@ -719,8 +719,8 @@ func TestCachedListShowsAtOnceAndWavesAtWhatMergedMeanwhile(t *testing.T) {
 	if !m.ready || len(m.visible) != len(cached) {
 		t.Fatalf("ready = %v, visible = %d; want the cached list on screen", m.ready, len(m.visible))
 	}
-	if !strings.Contains(m.statusView(), "3h") {
-		t.Errorf("status %q does not say how old the cache is", m.statusView())
+	if !strings.Contains(m.statusView(80), "3h") {
+		t.Errorf("status %q does not say how old the cache is", m.statusView(80))
 	}
 
 	// The cached login is confirmed before anything is searched as it.
