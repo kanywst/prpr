@@ -388,7 +388,9 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 	mt := m.metrics()
 	mouse := msg.Mouse()
-	overDetail := mt.fullDetail || (mt.splitDetail && mouse.X > mt.listW+2)
+	// The list ends at column listW+1 (inside the border and padding), the
+	// same edge handleClick uses.
+	overDetail := mt.fullDetail || (mt.splitDetail && mouse.X > mt.listW+1)
 
 	switch mouse.Button {
 	case tea.MouseWheelUp:
