@@ -212,8 +212,8 @@ func (c *Client) Search(ctx context.Context, scopes []Scope) (Result, error) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			prs, total, err := c.search(ctx, scope)
-			answers[i] = answer{prs: prs, outcome: Outcome{Scope: scope, Err: err, Total: total}}
+			prs, total, partial, err := c.search(ctx, scope)
+			answers[i] = answer{prs: prs, outcome: Outcome{Scope: scope, Err: err, Total: total, Partial: partial}}
 		}()
 	}
 	wg.Wait()
@@ -242,21 +242,45 @@ func (c *Client) Search(ctx context.Context, scopes []Scope) (Result, error) {
 	return res, nil
 }
 
-// search runs a single scope, returning its pull requests and how many
-// matched in total.
-func (c *Client) search(ctx context.Context, scope Scope) ([]PR, int, error) {
+// search runs a single scope, returning its pull requests, how many matched
+// in total, and whether some of the matches were withheld.
+//
+// GitHub answers a search that hits a pull request the token may not read (in
+// an org enforcing SAML SSO, say) with the readable nodes, a null in place of
+// each unreadable one, and an error pointing at it. That is a partial answer,
+// not a failed one: keep what was readable.
+func (c *Client) search(ctx context.Context, scope Scope) (prs []PR, total int, partial bool, err error) {
 	vars := map[string]any{"q": scope.query(), "limit": SearchLimit}
 	var resp searchResponse
 	if err := c.gql.DoWithContext(ctx, searchQuery, vars, &resp); err != nil {
-		return nil, 0, fmt.Errorf("pull request search for %s failed: %w", scope, err)
+		if !nodeErrorsOnly(err) {
+			return nil, 0, false, fmt.Errorf("pull request search for %s failed: %w", scope, err)
+		}
+		partial = true
 	}
-	prs := make([]PR, 0, len(resp.Search.Nodes))
+	prs = make([]PR, 0, len(resp.Search.Nodes))
 	for _, n := range resp.Search.Nodes {
 		if pr, ok := n.toPR(); ok {
 			prs = append(prs, pr)
 		}
 	}
-	return prs, resp.Search.IssueCount, nil
+	return prs, resp.Search.IssueCount, partial, nil
+}
+
+// nodeErrorsOnly reports whether err is a GraphQL error response in which
+// every error is about a single search result node, leaving the rest of the
+// data intact.
+func nodeErrorsOnly(err error) bool {
+	var gerr *api.GraphQLError
+	if !errors.As(err, &gerr) || len(gerr.Errors) == 0 {
+		return false
+	}
+	for _, e := range gerr.Errors {
+		if len(e.Path) < 3 || e.Path[0] != "search" || e.Path[1] != "nodes" {
+			return false
+		}
+	}
+	return true
 }
 
 // SortPRs orders pull requests most-recently-updated first, falling back to

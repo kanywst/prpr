@@ -208,3 +208,37 @@ func TestStateReadsPullRequestsAndIssues(t *testing.T) {
 		})
 	}
 }
+
+func TestSearchKeepsAPartialAnswer(t *testing.T) {
+	// One hit in an org enforcing SAML SSO comes back as a null node and an
+	// error pointing at it, alongside the readable nodes.
+	partial := `{"data":{"search":{"issueCount":3,"nodes":[` +
+		`{"number":1,"repository":{"nameWithOwner":"alice/app"},"updatedAt":"2026-01-01T00:00:00Z"},` +
+		`null,` +
+		`{"number":2,"repository":{"nameWithOwner":"bob/lib"},"updatedAt":"2026-01-02T00:00:00Z"}]}},` +
+		`"errors":[{"type":"FORBIDDEN","path":["search","nodes",1],"message":"Resource protected by organization SAML enforcement."}]}`
+	c := testClient(t, fakeGraphQL{"kanywst": partial})
+
+	res, err := c.Search(context.Background(), []Scope{AuthorScope("kanywst")})
+	if err != nil {
+		t.Fatalf("Search() error for a partial answer: %v", err)
+	}
+	if len(res.PRs) != 2 {
+		t.Fatalf("got %d PRs, want the 2 readable ones", len(res.PRs))
+	}
+	// The withheld one may be any pull request the scope covers, so a pull
+	// request missing from this answer must not be waved off as closed.
+	gone := PR{Number: 9, Repo: "carol/secret", Author: "kanywst"}
+	if !res.Unsure(gone) {
+		t.Error("Unsure() = false for a pull request a partial scope covers")
+	}
+}
+
+func TestSearchFailsOnAWholeQueryError(t *testing.T) {
+	// An error that is not about a single node still fails the scope.
+	broken := `{"data":null,"errors":[{"type":"RATE_LIMITED","message":"API rate limit exceeded"}]}`
+	c := testClient(t, fakeGraphQL{"kanywst": broken})
+	if _, err := c.Search(context.Background(), []Scope{AuthorScope("kanywst")}); err == nil {
+		t.Fatal("Search() = nil error for a rate-limited query")
+	}
+}
