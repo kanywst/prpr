@@ -2,14 +2,24 @@
 package browser
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
 	"runtime"
+	"strings"
+	"time"
 )
 
-// command returns the platform's "open this URL" command.
-func command(url string) (name string, args []string) {
+// settle is how long Open waits for the launcher to report back. macOS open
+// and rundll32 hand the URL off and exit within milliseconds, but xdg-open can
+// stay attached to a browser it had to start, so a launcher still running at
+// this point is taken to have succeeded.
+const settle = 3 * time.Second
+
+// command returns the platform's "open this URL" command. It is a variable so
+// tests can stand in a launcher that fails or hangs.
+var command = func(url string) (name string, args []string) {
 	switch runtime.GOOS {
 	case "darwin":
 		return "open", []string{url}
@@ -22,23 +32,36 @@ func command(url string) (name string, args []string) {
 	}
 }
 
-// Open launches url in the default browser and returns without waiting for it.
+// Open launches url in the default browser. It reports a launcher that could
+// not start or that exited with an error, such as macOS open failing to reach
+// Launch Services, rather than assuming the hand-off worked.
 func Open(url string) error {
-	return OpenContext(context.Background(), url)
-}
-
-// OpenContext launches url in the default browser. The context bounds only the
-// launcher process, which exits immediately; the browser it hands off to is
-// unaffected by cancellation.
-func OpenContext(ctx context.Context, url string) error {
 	name, args := command(url)
 
-	cmd := exec.CommandContext(ctx, name, args...)
+	var stderr bytes.Buffer
+	// Not bound to a cancelable context: killing a launcher that outlives
+	// settle would only race the browser it is handing off to.
+	cmd := exec.CommandContext(context.Background(), name, args...)
+	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("could not launch %s: %w", name, err)
 	}
-	// The browser outlives prpr; reap the launcher so it does not linger as a
-	// zombie for the rest of the session.
-	go func() { _ = cmd.Wait() }()
-	return nil
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			return nil
+		}
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return fmt.Errorf("%s failed: %w: %s", name, err, msg)
+		}
+		return fmt.Errorf("%s failed: %w", name, err)
+	case <-time.After(settle):
+		// The launcher is still reaped by the goroutine above once it exits,
+		// so it does not linger as a zombie.
+		return nil
+	}
 }
