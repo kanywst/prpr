@@ -96,6 +96,13 @@ jobs:
         with:
           version: v2.13.2
 
+      # Run from the toolchain setup-go installed above, which is the one
+      # go.mod pins and the one the release is built with, so the standard
+      # library findings describe the shipped binary. golang/govulncheck-action
+      # would install its own Go (stable by default) and scan that instead.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
   # The release config is a pile of templates that nothing else exercises. Left
   # to itself, a typo in it surfaces the next time a v* tag is pushed, halfway
   # through a release that then needs a fresh tag to retry. Build it for real
