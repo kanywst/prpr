@@ -56,6 +56,17 @@ go install github.com/kanywst/prpr@latest
 
 macOS / Linux / Windows のビルド済みバイナリは [Releases](https://github.com/kanywst/prpr/releases/latest) にある。
 
+アーカイブごとに SPDX 形式の SBOM (`.sbom.json`) が付き、checksums ファイルは release workflow が cosign で keyless 署名している。ダウンロードしたものの検証:
+
+```bash
+cosign verify-blob \
+  --bundle prpr-X.Y.Z-checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/kanywst/prpr/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  prpr-X.Y.Z-checksums.txt
+sha256sum --ignore-missing -c prpr-X.Y.Z-checksums.txt
+```
+
 ## 使い方
 
 ```bash
