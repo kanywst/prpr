@@ -15,6 +15,7 @@ There is nothing to configure. prpr asks GitHub who you are and watches **your o
 - **Finds its own owners.** Asks GitHub for your login and your orgs at startup, then lists every open pull request under them.
 - **Reaches outside them too.** Your pull requests to other people's projects, and review requests from orgs you are not in, are searched as well.
 - **Notices merges.** When a pull request leaves the list, prpr looks up how it ended and shows a farewell banner for a few seconds before it fades.
+- **Notices arrivals.** A pull request that joins the list after it was first shown, a new review request say, is marked 🆕 until you move the cursor onto it. Widening what is watched (a new org, `exclude_owners` shrinking) brings its pull requests in as arrivals too.
 - **Six tabs.** Everything, yours, awaiting your review, elsewhere (outside the watched owners), drafts, and bots, each with a live count. Pull requests opened by bots (dependabot, renovate and the like) live only in the bots tab, unless one asks you for a review by name.
 - **Issues too, if you like.** `--issues` (or `issues: true`) mixes open issues into the list, marked 🎫, searched the same way as pull requests. They get an issues tab of their own, and the review tab becomes "your turn": review requests plus the issues assigned to you.
 - **Keeps going when an org does not answer.** An org that refuses the search (SAML SSO the token is not authorized for, say) is named in the header, and the rest of the list stays up. When an owner has more open pull requests than one search returns, the header says so too.
@@ -138,6 +139,7 @@ The cache lives in `$XDG_CACHE_HOME/prpr/cache.json`, or `~/.cache/prpr/cache.js
 | 🟢 / 🟡 / 🔴 / ⚪ | Checks passing / running / failing / none |
 | 📝 | Draft |
 | 🎫 | Issue (with `--issues`) |
+| 🆕 | Joined the list since prpr opened, or since the last run. Cleared once you move the cursor onto it |
 | ✅ / 🔁 / 👀 | Approved / changes requested / review requested |
 
 ## Layout
