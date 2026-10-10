@@ -210,6 +210,7 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 	if carried {
 		gh.SortPRs(prs)
 	}
+	m.arrived = m.arrivals(prs)
 
 	m.loading = false
 	m.ready = true
@@ -223,6 +224,45 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 
 	cmds = append(cmds, m.saveCmd(prs, msg.at))
 	return m, tea.Batch(cmds...)
+}
+
+// arrivals is the arrival marks for the list a refresh is about to install:
+// those still unseen, plus whatever the list on screen did not have. The very
+// first list, with nothing cached before it, has nothing to compare against,
+// so none of it counts as arrived.
+//
+// Missing from the list on screen is not the same as new: a scope that failed,
+// came back partial or hit the page cap last time may simply not have shown a
+// pull request that was open all along. Under such a scope only one opened
+// since that list was fetched counts.
+func (m Model) arrivals(prs []gh.PR) map[string]bool {
+	if !m.ready {
+		return nil
+	}
+	had := make(map[string]bool, len(m.prs))
+	for _, pr := range m.prs {
+		had[pr.Key()] = true
+	}
+	prev := gh.Result{Outcomes: m.outcomes}
+	since := m.lastFetch
+	if !m.cachedAt.IsZero() {
+		since = m.cachedAt
+	}
+	out := make(map[string]bool)
+	for _, pr := range prs {
+		k := pr.Key()
+		switch {
+		case m.arrived[k]:
+		case had[k]:
+			continue
+		case prev.Unsure(pr) || prev.Withheld(pr) || prev.Capped(pr):
+			if !pr.CreatedAt.After(since) {
+				continue
+			}
+		}
+		out[k] = true
+	}
+	return out
 }
 
 // handleGone turns a vanished pull request into a goodbye banner.
@@ -299,49 +339,59 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.cursor--
 		m.clampCursor()
 		m.syncDetail()
+		m.markSeen()
 
 	case key.Matches(msg, m.keys.Down):
 		m.cursor++
 		m.clampCursor()
 		m.syncDetail()
+		m.markSeen()
 
 	case key.Matches(msg, m.keys.Top):
 		m.cursor = 0
 		m.clampCursor()
 		m.syncDetail()
+		m.markSeen()
 
 	case key.Matches(msg, m.keys.Bottom):
 		m.cursor = len(m.visible) - 1
 		m.clampCursor()
 		m.syncDetail()
+		m.markSeen()
 
 	case key.Matches(msg, m.keys.PageUp):
 		m.cursor -= mt.rows
 		m.clampCursor()
 		m.syncDetail()
+		m.markSeen()
 
 	case key.Matches(msg, m.keys.PageDown):
 		m.cursor += mt.rows
 		m.clampCursor()
 		m.syncDetail()
+		m.markSeen()
 
 	case key.Matches(msg, m.keys.NextTab):
 		m.tab = m.tab.step(m.tabs(), 1)
 		m.offset = 0
 		m.recompute()
+		m.markSeen()
 
 	case key.Matches(msg, m.keys.PrevTab):
 		m.tab = m.tab.step(m.tabs(), -1)
 		m.offset = 0
 		m.recompute()
+		m.markSeen()
 
 	case key.Matches(msg, m.keys.Open):
 		if pr, ok := m.selected(); ok {
+			m.markSeen()
 			return m, m.openCmd(pr.URL)
 		}
 
 	case key.Matches(msg, m.keys.Copy):
 		if pr, ok := m.selected(); ok {
+			m.markSeen()
 			return m, m.copyCmd(pr.URL)
 		}
 
@@ -411,6 +461,7 @@ func (m Model) handleWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 
 	m.clampCursor()
 	m.syncDetail()
+	m.markSeen()
 	return m, nil
 }
 
@@ -447,6 +498,7 @@ func (m Model) handleClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	m.cursor = idx
 	m.clampCursor()
 	m.syncDetail()
+	m.markSeen()
 	return m, nil
 }
 

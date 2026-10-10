@@ -5,6 +5,7 @@ package ui
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"time"
 
@@ -117,6 +118,10 @@ type Model struct {
 	// line's partial-failure and page-cap warnings.
 	outcomes  []gh.Outcome
 	farewells []farewell
+	// arrived holds the keys of pull requests that joined the list after it
+	// was first shown, until the cursor is moved onto them. It is replaced,
+	// never mutated in place, because Model is copied on every Update.
+	arrived map[string]bool
 
 	cursor int
 	offset int
@@ -349,6 +354,19 @@ func (m *Model) syncDetail() {
 	m.detailKey = pr.Key()
 	m.detail.SetContent(m.detailContent(pr))
 	m.detail.GotoTop()
+}
+
+// markSeen clears the arrival mark on the pull request under the cursor. It is
+// called only when the user moves the cursor or acts on the selection, so a
+// refresh that happens to land the cursor on a newcomer does not swallow it.
+func (m *Model) markSeen() {
+	pr, ok := m.selected()
+	if !ok || !m.arrived[pr.Key()] {
+		return
+	}
+	arrived := maps.Clone(m.arrived)
+	delete(arrived, pr.Key())
+	m.arrived = arrived
 }
 
 // setFlash shows a transient one-line message in the status area.

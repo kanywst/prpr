@@ -1109,3 +1109,103 @@ func TestWheelOverTheSeparatorScrollsTheDetailPane(t *testing.T) {
 		t.Errorf("wheel on the separator moved the list cursor to %d", m.cursor)
 	}
 }
+
+func TestArrivalsAreMarkedUntilTheCursorReachesThem(t *testing.T) {
+	now := time.Now()
+	all := samplePRs(now)
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+
+	// The first list has nothing to compare against.
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all[1:]}, at: now})
+	if len(m.arrived) != 0 {
+		t.Fatalf("arrived = %v after the first refresh, want none", m.arrived)
+	}
+
+	// #128 joins at the top, above the cursor, which stays on #127.
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all}, at: now.Add(time.Minute)})
+	if !m.arrived["0-draft/api#128"] || len(m.arrived) != 1 {
+		t.Fatalf("arrived = %v, want only #128", m.arrived)
+	}
+	if !strings.Contains(strings.Join(m.rowView(all[0], false, 80, false), "\n"), arrivedIcon) {
+		t.Error("the row of an arrival does not carry the arrival icon")
+	}
+
+	// It stays marked across a refresh that still has it.
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all}, at: now.Add(2 * time.Minute)})
+	if !m.arrived["0-draft/api#128"] {
+		t.Fatal("the arrival mark did not survive a refresh")
+	}
+
+	// Moving onto it clears it.
+	m, _ = step(t, m, tea.KeyPressMsg{Code: 'k', Text: "k"})
+	if pr, _ := m.selected(); pr.Number != 128 {
+		t.Fatalf("cursor on #%d, want #128", pr.Number)
+	}
+	if len(m.arrived) != 0 {
+		t.Errorf("arrived = %v after the cursor reached it, want none", m.arrived)
+	}
+}
+
+func TestCachedStartMarksWhatArrivedMeanwhile(t *testing.T) {
+	now := time.Now()
+	all := samplePRs(now)
+	f := &fakeFetcher{me: "kanywst"}
+	m := New(Config{
+		Fetcher: f, Interval: time.Minute, Timeout: time.Second,
+		Owners: []string{"kanywst", "0-draft"},
+		Cached: &cache.Snapshot{Me: "kanywst", Owners: []string{"kanywst", "0-draft"}, PRs: all[1:], At: now.Add(-time.Hour)},
+	})
+	m.applyTheme(true)
+	m, _ = step(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all}, at: now})
+	if !m.arrived["0-draft/api#128"] || len(m.arrived) != 1 {
+		t.Errorf("arrived = %v, want #128, opened while prpr was closed", m.arrived)
+	}
+}
+
+func TestARecoveredScopeIsNotAnArrival(t *testing.T) {
+	now := time.Now()
+	all := samplePRs(now)
+	for i := range all {
+		all[i].CreatedAt = now.Add(-30 * 24 * time.Hour)
+	}
+	opened := gh.PR{Number: 129, Title: "new", Repo: "0-draft/api", Author: "alice", CreatedAt: now.Add(30 * time.Second), UpdatedAt: now.Add(30 * time.Second)}
+
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+
+	// 0-draft refuses the first search, so only kanywst/prpr#12 is shown.
+	failed := []gh.Outcome{{Scope: gh.OwnerScope("kanywst")}, {Scope: gh.OwnerScope("0-draft"), Err: errors.New("SAML")}}
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all[2:], Outcomes: failed}, at: now})
+
+	// It answers next time, with a pull request opened in between.
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: append(slices.Clone(all), opened)}, at: now.Add(time.Minute)})
+	if !m.arrived[opened.Key()] || len(m.arrived) != 1 {
+		t.Errorf("arrived = %v, want only #129: the rest of 0-draft was open all along", m.arrived)
+	}
+}
+
+func TestSwitchingTabsSeesTheRowItLandsOn(t *testing.T) {
+	now := time.Now()
+	all := samplePRs(now)
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all[:1]}, at: now})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all}, at: now.Add(time.Minute)})
+	if !m.arrived["0-draft/api#127"] {
+		t.Fatalf("arrived = %v, want #127", m.arrived)
+	}
+
+	// #127 asks kanywst for a review, so it heads the review tab.
+	for m.tab != tabReview {
+		m, _ = step(t, m, tea.KeyPressMsg{Code: tea.KeyTab})
+	}
+	if pr, _ := m.selected(); pr.Number != 127 {
+		t.Fatalf("review tab opens on #%d, want #127", pr.Number)
+	}
+	if m.arrived["0-draft/api#127"] {
+		t.Error("the row the tab opened on is still marked")
+	}
+}

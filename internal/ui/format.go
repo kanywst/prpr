@@ -34,6 +34,10 @@ func humanAge(d time.Duration, s Strings) string {
 // those use, so an issue never reads as a check result.
 const issueIcon = "🎫"
 
+// arrivedIcon marks a pull request that joined the list since it was first
+// shown, the counterpart of the farewell a merged one gets.
+const arrivedIcon = "🆕"
+
 // kindIcon is the glyphs at the head of a row: the ticket for an issue, and
 // the check and review state for a pull request.
 func kindIcon(pr gh.PR) string {
