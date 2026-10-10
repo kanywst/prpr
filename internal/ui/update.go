@@ -375,11 +375,13 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.tab = m.tab.step(m.tabs(), 1)
 		m.offset = 0
 		m.recompute()
+		m.markSeen()
 
 	case key.Matches(msg, m.keys.PrevTab):
 		m.tab = m.tab.step(m.tabs(), -1)
 		m.offset = 0
 		m.recompute()
+		m.markSeen()
 
 	case key.Matches(msg, m.keys.Open):
 		if pr, ok := m.selected(); ok {

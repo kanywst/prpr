@@ -1186,3 +1186,26 @@ func TestARecoveredScopeIsNotAnArrival(t *testing.T) {
 		t.Errorf("arrived = %v, want only #129: the rest of 0-draft was open all along", m.arrived)
 	}
 }
+
+func TestSwitchingTabsSeesTheRowItLandsOn(t *testing.T) {
+	now := time.Now()
+	all := samplePRs(now)
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all[:1]}, at: now})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all}, at: now.Add(time.Minute)})
+	if !m.arrived["0-draft/api#127"] {
+		t.Fatalf("arrived = %v, want #127", m.arrived)
+	}
+
+	// #127 asks kanywst for a review, so it heads the review tab.
+	for m.tab != tabReview {
+		m, _ = step(t, m, tea.KeyPressMsg{Code: tea.KeyTab})
+	}
+	if pr, _ := m.selected(); pr.Number != 127 {
+		t.Fatalf("review tab opens on #%d, want #127", pr.Number)
+	}
+	if m.arrived["0-draft/api#127"] {
+		t.Error("the row the tab opened on is still marked")
+	}
+}
