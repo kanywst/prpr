@@ -53,6 +53,17 @@ go install github.com/kanywst/prpr@latest
 
 Prebuilt binaries for macOS, Linux and Windows are on the [releases page](https://github.com/kanywst/prpr/releases/latest).
 
+Each archive comes with an SPDX SBOM (`.sbom.json`), and the checksums file is signed keylessly with cosign by the release workflow. To check a download:
+
+```bash
+cosign verify-blob \
+  --bundle prpr-X.Y.Z-checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/kanywst/prpr/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  prpr-X.Y.Z-checksums.txt
+sha256sum --ignore-missing -c prpr-X.Y.Z-checksums.txt
+```
+
 ## Usage
 
 ```bash
