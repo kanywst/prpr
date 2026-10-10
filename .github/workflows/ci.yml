@@ -127,15 +127,26 @@ jobs:
           version: "~> v2"
           args: check
 
+      # The snapshot writes the SBOMs too. Signing is skipped: it needs the
+      # release workflow's OIDC token, which a pull request does not get.
+      - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: "~> v2"
           # Builds every target and renders the Homebrew cask, without pushing
           # anything. The token only has to be non-empty for the template to
           # resolve; nothing authenticates with it on this path.
-          args: release --snapshot --clean --skip=publish,announce
+          args: release --snapshot --clean --skip=publish,announce,sign
         env:
           HOMEBREW_TAP_GITHUB_TOKEN: unused-in-snapshot-builds
 
       - name: The cask rendered
         run: test -s dist/homebrew/Casks/prpr.rb && cat dist/homebrew/Casks/prpr.rb
+
+      - name: Every archive has an SBOM
+        run: |
+          archives=$(find dist -maxdepth 1 \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l)
+          sboms=$(find dist -maxdepth 1 -name '*.sbom.json' | wc -l)
+          echo "archives=$archives sboms=$sboms"
+          test "$archives" -gt 0 && test "$archives" -eq "$sboms"
