@@ -1147,6 +1147,77 @@ func TestArrivalsAreMarkedUntilTheCursorReachesThem(t *testing.T) {
 	}
 }
 
+func TestChangesAreMarkedUntilTheCursorReachesThem(t *testing.T) {
+	now := time.Now()
+	all := samplePRs(now)
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all}, at: now})
+
+	// #127's checks finish. #12's fail to pending too, but it is a draft and
+	// its row shows 📝 either way, so that is not a change worth a mark.
+	next := slices.Clone(all)
+	next[1].Check = gh.CheckSuccess
+	next[2].Check = gh.CheckPending
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: next}, at: now.Add(time.Minute)})
+	if !m.changed["0-draft/api#127"] || len(m.changed) != 1 {
+		t.Fatalf("changed = %v, want only #127", m.changed)
+	}
+	if !strings.Contains(strings.Join(m.rowView(next[1], false, 80, false), "\n"), changedIcon) {
+		t.Error("the row of a change does not carry the change icon")
+	}
+
+	// It stays marked across a refresh that changes nothing more.
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: next}, at: now.Add(2 * time.Minute)})
+	if !m.changed["0-draft/api#127"] {
+		t.Fatal("the change mark did not survive a refresh")
+	}
+
+	// Moving onto it clears it.
+	m, _ = step(t, m, tea.KeyPressMsg{Code: 'j', Text: "j"})
+	if pr, _ := m.selected(); pr.Number != 127 {
+		t.Fatalf("cursor on #%d, want #127", pr.Number)
+	}
+	if len(m.changed) != 0 {
+		t.Errorf("changed = %v after the cursor reached it, want none", m.changed)
+	}
+}
+
+func TestAnArrivalIsNotAlsoAChange(t *testing.T) {
+	now := time.Now()
+	all := samplePRs(now)
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all[1:]}, at: now})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all}, at: now.Add(time.Minute)})
+
+	next := slices.Clone(all)
+	next[0].Check = gh.CheckFailure
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: next}, at: now.Add(2 * time.Minute)})
+	if !m.arrived["0-draft/api#128"] || len(m.changed) != 0 {
+		t.Errorf("arrived = %v, changed = %v, want #128 arrived and nothing changed", m.arrived, m.changed)
+	}
+}
+
+func TestCachedStartMarksWhatChangedMeanwhile(t *testing.T) {
+	now := time.Now()
+	all := samplePRs(now)
+	m := New(Config{
+		Fetcher: &fakeFetcher{me: "kanywst"}, Interval: time.Minute, Timeout: time.Second,
+		Owners: []string{"kanywst", "0-draft"},
+		Cached: &cache.Snapshot{Me: "kanywst", Owners: []string{"kanywst", "0-draft"}, PRs: all, At: now.Add(-time.Hour)},
+	})
+	m.applyTheme(true)
+	m, _ = step(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	next := slices.Clone(all)
+	next[1].Review = gh.ReviewChanges
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: next}, at: now})
+	if !m.changed["0-draft/api#127"] || len(m.changed) != 1 {
+		t.Errorf("changed = %v, want #127, reviewed while prpr was closed", m.changed)
+	}
+}
+
 func TestCachedStartMarksWhatArrivedMeanwhile(t *testing.T) {
 	now := time.Now()
 	all := samplePRs(now)

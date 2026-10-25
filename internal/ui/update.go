@@ -211,6 +211,7 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 		gh.SortPRs(prs)
 	}
 	m.arrived = m.arrivals(prs)
+	m.changed = m.changes(prs)
 
 	m.loading = false
 	m.ready = true
@@ -261,6 +262,34 @@ func (m Model) arrivals(prs []gh.PR) map[string]bool {
 			}
 		}
 		out[k] = true
+	}
+	return out
+}
+
+// changes is the change marks for the list a refresh is about to install:
+// those still unseen, plus every pull request whose check or review glyph
+// differs from the one on screen. An arrival is not also a change, and the
+// very first list, like for arrivals, has nothing to compare against.
+//
+// The glyph is compared rather than the raw state so that a change the row
+// cannot show (EXPECTED to PENDING, say) does not mark it.
+func (m Model) changes(prs []gh.PR) map[string]bool {
+	if !m.ready {
+		return nil
+	}
+	had := make(map[string]string, len(m.prs))
+	for _, pr := range m.prs {
+		had[pr.Key()] = kindIcon(pr)
+	}
+	out := make(map[string]bool)
+	for _, pr := range prs {
+		k := pr.Key()
+		if m.arrived[k] {
+			continue
+		}
+		if was, ok := had[k]; m.changed[k] || ok && was != kindIcon(pr) {
+			out[k] = true
+		}
 	}
 	return out
 }
