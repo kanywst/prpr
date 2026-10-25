@@ -122,6 +122,10 @@ type Model struct {
 	// was first shown, until the cursor is moved onto them. It is replaced,
 	// never mutated in place, because Model is copied on every Update.
 	arrived map[string]bool
+	// changed holds the keys of pull requests whose check or review glyph
+	// changed while they were on the list, until the cursor is moved onto
+	// them. Like arrived, it is replaced rather than mutated.
+	changed map[string]bool
 
 	cursor int
 	offset int
@@ -356,17 +360,27 @@ func (m *Model) syncDetail() {
 	m.detail.GotoTop()
 }
 
-// markSeen clears the arrival mark on the pull request under the cursor. It is
-// called only when the user moves the cursor or acts on the selection, so a
-// refresh that happens to land the cursor on a newcomer does not swallow it.
+// markSeen clears the arrival and change marks on the pull request under the
+// cursor. It is called only when the user moves the cursor or acts on the
+// selection, so a refresh that happens to land the cursor on a newcomer does
+// not swallow it.
 func (m *Model) markSeen() {
 	pr, ok := m.selected()
-	if !ok || !m.arrived[pr.Key()] {
+	if !ok {
 		return
 	}
-	arrived := maps.Clone(m.arrived)
-	delete(arrived, pr.Key())
-	m.arrived = arrived
+	m.arrived = without(m.arrived, pr.Key())
+	m.changed = without(m.changed, pr.Key())
+}
+
+// without is marks minus key, cloned only when key was there.
+func without(marks map[string]bool, key string) map[string]bool {
+	if !marks[key] {
+		return marks
+	}
+	out := maps.Clone(marks)
+	delete(out, key)
+	return out
 }
 
 // setFlash shows a transient one-line message in the status area.

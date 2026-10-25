@@ -406,8 +406,11 @@ func (m Model) rowView(pr gh.PR, selected bool, width int, compact bool) []strin
 	}
 
 	icons := kindIcon(pr)
-	if m.arrived[pr.Key()] {
+	switch {
+	case m.arrived[pr.Key()]:
 		icons = arrivedIcon + icons
+	case m.changed[pr.Key()]:
+		icons = changedIcon + icons
 	}
 	number := m.theme.Number.Render(fmt.Sprintf("#%d", pr.Number))
 

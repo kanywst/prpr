@@ -38,6 +38,10 @@ const issueIcon = "🎫"
 // shown, the counterpart of the farewell a merged one gets.
 const arrivedIcon = "🆕"
 
+// changedIcon marks a pull request whose check or review state changed while
+// it was on the list: its CI finished, say, or a reviewer approved it.
+const changedIcon = "🔔"
+
 // kindIcon is the glyphs at the head of a row: the ticket for an issue, and
 // the check and review state for a pull request.
 func kindIcon(pr gh.PR) string {
