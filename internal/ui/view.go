@@ -469,6 +469,9 @@ func (m Model) detailContent(pr gh.PR) string {
 		if r := reviewIcon(pr.Review); r != "" {
 			state += "   " + r + " " + reviewWord(pr.Review, m.s)
 		}
+		if c := mergeIcon(pr); c != "" {
+			state += "   " + c + " " + m.s.Conflicting
+		}
 	}
 	ago := func(at time.Time) string {
 		// "just now" already says when; "just now ago" does not read.

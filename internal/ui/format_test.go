@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -124,5 +125,20 @@ func TestStateWord(t *testing.T) {
 	}
 	if icon, _ := stateWord(gh.StateClosed, en); icon != "🌙" {
 		t.Errorf("closed icon = %q, want 🌙", icon)
+	}
+}
+
+func TestKindIconShowsAConflict(t *testing.T) {
+	pr := gh.PR{Check: gh.CheckSuccess, Review: gh.ReviewApproved}
+	if got := kindIcon(pr); strings.Contains(got, conflictIcon) {
+		t.Errorf("kindIcon(clean) = %q, carries the conflict icon", got)
+	}
+	pr.Mergeable = gh.MergeableConflict
+	if got, want := kindIcon(pr), "🟢✅"+conflictIcon; got != want {
+		t.Errorf("kindIcon(conflict) = %q, want %q", got, want)
+	}
+	pr.IsDraft = true
+	if got, want := kindIcon(pr), "📝✅"+conflictIcon; got != want {
+		t.Errorf("kindIcon(draft conflict) = %q, want %q", got, want)
 	}
 }

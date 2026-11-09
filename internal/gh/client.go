@@ -115,6 +115,7 @@ query($q: String!, $limit: Int!) {
         deletions
         changedFiles
         reviewDecision
+        mergeable
         headRefName
         baseRefName
         comments { totalCount }
@@ -161,7 +162,9 @@ type searchNode struct {
 	BaseRefName  string `json:"baseRefName"`
 	// reviewDecision is null in repositories without review requirements.
 	ReviewDecision *string `json:"reviewDecision"`
-	Comments       struct {
+	// mergeable is MERGEABLE, CONFLICTING or UNKNOWN.
+	Mergeable string `json:"mergeable"`
+	Comments  struct {
 		TotalCount int `json:"totalCount"`
 	} `json:"comments"`
 	// author is null when the account has been deleted.

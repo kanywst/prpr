@@ -210,6 +210,7 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 	if carried {
 		gh.SortPRs(prs)
 	}
+	prs = m.keepMergeable(prs)
 	m.arrived = m.arrivals(prs)
 	m.changed = m.changes(prs)
 
@@ -272,14 +273,15 @@ func (m Model) arrivals(prs []gh.PR) map[string]bool {
 // very first list, like for arrivals, has nothing to compare against.
 //
 // The glyph is compared rather than the raw state so that a change the row
-// cannot show (EXPECTED to PENDING, say) does not mark it.
+// cannot show (EXPECTED to PENDING, say) does not mark it. A mergeable state
+// seen for the first time does not mark it either.
 func (m Model) changes(prs []gh.PR) map[string]bool {
 	if !m.ready {
 		return nil
 	}
-	had := make(map[string]string, len(m.prs))
+	had := make(map[string]gh.PR, len(m.prs))
 	for _, pr := range m.prs {
-		had[pr.Key()] = kindIcon(pr)
+		had[pr.Key()] = pr
 	}
 	out := make(map[string]bool)
 	for _, pr := range prs {
@@ -287,11 +289,36 @@ func (m Model) changes(prs []gh.PR) map[string]bool {
 		if m.arrived[k] {
 			continue
 		}
-		if was, ok := had[k]; m.changed[k] || ok && was != kindIcon(pr) {
+		was, ok := had[k]
+		if ok && was.Mergeable == gh.MergeableUnknown {
+			// Never known before (a cache written before prpr read it, or
+			// GitHub still working it out): learning it is not a change.
+			pr.Mergeable = gh.MergeableUnknown
+		}
+		if m.changed[k] || ok && kindIcon(was) != kindIcon(pr) {
 			out[k] = true
 		}
 	}
 	return out
+}
+
+// keepMergeable fills in the last known mergeable state of every pull request
+// GitHub reported as unknown. It goes unknown for a while after the base
+// moves, and reading that as clean would make a conflict blink off and back
+// on, marking the row 🔔 each time it returned.
+func (m Model) keepMergeable(prs []gh.PR) []gh.PR {
+	was := make(map[string]gh.Mergeable, len(m.prs))
+	for _, pr := range m.prs {
+		if pr.Mergeable != gh.MergeableUnknown {
+			was[pr.Key()] = pr.Mergeable
+		}
+	}
+	for i, pr := range prs {
+		if v, ok := was[pr.Key()]; ok && pr.Mergeable == gh.MergeableUnknown {
+			prs[i].Mergeable = v
+		}
+	}
+	return prs
 }
 
 // handleGone turns a vanished pull request into a goodbye banner.
