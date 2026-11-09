@@ -33,6 +33,18 @@ const (
 	ReviewRequired Review = "REVIEW_REQUIRED"
 )
 
+// Mergeable is whether a pull request merges cleanly into its base.
+type Mergeable string
+
+// Mergeable states, as reported by mergeable. GitHub works the answer out in
+// the background, so a pull request whose base just moved reports UNKNOWN
+// until it has; that is kept as MergeableUnknown rather than read as clean.
+const (
+	MergeableUnknown  Mergeable = ""
+	MergeableClean    Mergeable = "MERGEABLE"
+	MergeableConflict Mergeable = "CONFLICTING"
+)
+
 // State is how a pull request left the open list.
 type State string
 
@@ -69,9 +81,16 @@ type PR struct {
 	BaseRef      string
 	Check        Check
 	Review       Review
+	Mergeable    Mergeable
 	Reviewers    []string
 	Assignees    []string
 	Labels       []string
+}
+
+// Conflicts reports whether the pull request no longer merges cleanly into
+// its base.
+func (p PR) Conflicts() bool {
+	return !p.IsIssue && p.Mergeable == MergeableConflict
 }
 
 // Key uniquely identifies a pull request across repositories.

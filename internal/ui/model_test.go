@@ -1280,3 +1280,47 @@ func TestSwitchingTabsSeesTheRowItLandsOn(t *testing.T) {
 		t.Error("the row the tab opened on is still marked")
 	}
 }
+
+func TestAConflictIsAChangeAndSurvivesAnUnknownMergeable(t *testing.T) {
+	now := time.Now()
+	all := samplePRs(now)
+	for i := range all {
+		all[i].Mergeable = gh.MergeableClean
+	}
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all}, at: now})
+
+	// #128's base moves under it and it now conflicts.
+	next := slices.Clone(all)
+	next[0].Mergeable = gh.MergeableConflict
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: next}, at: now.Add(time.Minute)})
+	if !m.changed["0-draft/api#128"] || len(m.changed) != 1 {
+		t.Fatalf("changed = %v, want only #128", m.changed)
+	}
+	if !strings.Contains(strings.Join(m.rowView(next[0], false, 80, false), "\n"), conflictIcon) {
+		t.Error("the row of a conflicting pull request does not carry the conflict icon")
+	}
+	m, _ = step(t, m, tea.KeyPressMsg{Code: 'g', Text: "g"})
+	m, _ = step(t, m, tea.KeyPressMsg{Code: 'j', Text: "j"})
+	m, _ = step(t, m, tea.KeyPressMsg{Code: 'k', Text: "k"})
+	if len(m.changed) != 0 {
+		t.Fatalf("changed = %v after the cursor reached it, want none", m.changed)
+	}
+
+	// GitHub recomputes and reports every one as unknown for a while: the
+	// last known state stands, and nothing is marked.
+	unknown := slices.Clone(next)
+	for i := range unknown {
+		unknown[i].Mergeable = gh.MergeableUnknown
+	}
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: unknown}, at: now.Add(2 * time.Minute)})
+	if len(m.changed) != 0 {
+		t.Errorf("changed = %v after an unknown mergeable, want none", m.changed)
+	}
+	for _, pr := range m.prs {
+		if want := next[slices.IndexFunc(next, func(p gh.PR) bool { return p.Key() == pr.Key() })].Mergeable; pr.Mergeable != want {
+			t.Errorf("%s: mergeable %q, want the last known %q", pr.Key(), pr.Mergeable, want)
+		}
+	}
+}

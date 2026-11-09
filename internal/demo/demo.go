@@ -138,6 +138,7 @@ func fixtures(now time.Time) []gh.PR {
 			Number: 64, Title: "worker: retry the webhook delivery with jitter",
 			Repo: "0-draft/worker", Author: "bob",
 			Check: gh.CheckFailure, Review: gh.ReviewChanges,
+			Mergeable: gh.MergeableConflict,
 			Reviewers: []string{viewer, alice},
 			Additions: 96, Deletions: 41, ChangedFiles: 7, Comments: 12,
 			HeadRef: "feat/retry-jitter", BaseRef: mainRef,

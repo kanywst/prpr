@@ -31,6 +31,7 @@ func TestToPRFullNode(t *testing.T) {
 		"deletions": 9,
 		"changedFiles": 5,
 		"reviewDecision": "APPROVED",
+		"mergeable": "CONFLICTING",
 		"headRefName": "feat/rate-limiter",
 		"baseRefName": "main",
 		"comments": {"totalCount": 3},
@@ -167,5 +168,32 @@ func TestToPRReadsIssues(t *testing.T) {
 	}
 	if !pr.WaitsOn("kanywst") {
 		t.Error("WaitsOn is false for the assignee")
+	}
+}
+
+func TestToPRMergeable(t *testing.T) {
+	for raw, want := range map[string]Mergeable{
+		`"MERGEABLE"`:   MergeableClean,
+		`"CONFLICTING"`: MergeableConflict,
+		`"UNKNOWN"`:     MergeableUnknown,
+		`null`:          MergeableUnknown,
+	} {
+		n := decodeNode(t, `{"__typename": "PullRequest", "number": 1, "repository": {"nameWithOwner": "o/r"}, "mergeable": `+raw+`}`)
+		pr, ok := n.toPR()
+		if !ok {
+			t.Fatalf("mergeable %s: toPR returned ok=false", raw)
+		}
+		if pr.Mergeable != want {
+			t.Errorf("mergeable %s: got %q, want %q", raw, pr.Mergeable, want)
+		}
+		if got := pr.Conflicts(); got != (want == MergeableConflict) {
+			t.Errorf("mergeable %s: Conflicts() = %v", raw, got)
+		}
+	}
+}
+
+func TestAnIssueNeverConflicts(t *testing.T) {
+	if (PR{IsIssue: true, Mergeable: MergeableConflict}).Conflicts() {
+		t.Error("an issue reports a conflict")
 	}
 }

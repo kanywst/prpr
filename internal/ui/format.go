@@ -42,13 +42,26 @@ const arrivedIcon = "🆕"
 // it was on the list: its CI finished, say, or a reviewer approved it.
 const changedIcon = "🔔"
 
+// conflictIcon marks a pull request that no longer merges cleanly into its
+// base, which the check and review glyphs alone would not tell you.
+const conflictIcon = "💥"
+
 // kindIcon is the glyphs at the head of a row: the ticket for an issue, and
-// the check and review state for a pull request.
+// the check, review and conflict state for a pull request.
 func kindIcon(pr gh.PR) string {
 	if pr.IsIssue {
 		return issueIcon
 	}
-	return checkIcon(pr.Check, pr.IsDraft) + reviewIcon(pr.Review)
+	return checkIcon(pr.Check, pr.IsDraft) + reviewIcon(pr.Review) + mergeIcon(pr)
+}
+
+// mergeIcon is the conflict glyph, or "" for a pull request that merges
+// cleanly or whose state GitHub has not worked out yet.
+func mergeIcon(pr gh.PR) string {
+	if pr.Conflicts() {
+		return conflictIcon
+	}
+	return ""
 }
 
 // checkIcon maps a rolled-up CI state to a single glyph. Draft wins over the

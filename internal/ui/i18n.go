@@ -98,6 +98,7 @@ type Strings struct {
 	ReviewApproved string
 	ReviewChanges  string
 	ReviewRequired string
+	Conflicting    string
 
 	OpenedInBrowser string
 	BrowserFailed   string
@@ -207,6 +208,7 @@ var english = Strings{
 	ReviewApproved: "approved",
 	ReviewChanges:  "changes requested",
 	ReviewRequired: "review requested",
+	Conflicting:    "conflicts with the base",
 
 	OpenedInBrowser: "opened in the browser",
 	BrowserFailed:   "the browser could not be opened",
@@ -307,6 +309,7 @@ var japanese = Strings{
 	ReviewApproved: "承認済み",
 	ReviewChanges:  "変更依頼",
 	ReviewRequired: "レビュー待ち",
+	Conflicting:    "コンフリクトあり",
 
 	OpenedInBrowser: "ブラウザで開いたよ",
 	BrowserFailed:   "ブラウザを開けなかった",

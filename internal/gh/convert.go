@@ -38,6 +38,10 @@ func (n searchNode) toPR() (PR, bool) {
 	if n.ReviewDecision != nil {
 		pr.Review = Review(*n.ReviewDecision)
 	}
+	switch m := Mergeable(n.Mergeable); m {
+	case MergeableClean, MergeableConflict:
+		pr.Mergeable = m
+	}
 	if len(n.Commits.Nodes) > 0 {
 		if rollup := n.Commits.Nodes[0].Commit.StatusCheckRollup; rollup != nil {
 			pr.Check = Check(rollup.State)

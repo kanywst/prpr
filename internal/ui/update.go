@@ -210,6 +210,7 @@ func (m Model) handlePRs(msg prsMsg) (tea.Model, tea.Cmd) {
 	if carried {
 		gh.SortPRs(prs)
 	}
+	prs = m.keepMergeable(prs)
 	m.arrived = m.arrivals(prs)
 	m.changed = m.changes(prs)
 
@@ -292,6 +293,25 @@ func (m Model) changes(prs []gh.PR) map[string]bool {
 		}
 	}
 	return out
+}
+
+// keepMergeable fills in the last known mergeable state of every pull request
+// GitHub reported as unknown. It goes unknown for a while after the base
+// moves, and reading that as clean would make a conflict blink off and back
+// on, marking the row 🔔 each time it returned.
+func (m Model) keepMergeable(prs []gh.PR) []gh.PR {
+	was := make(map[string]gh.Mergeable, len(m.prs))
+	for _, pr := range m.prs {
+		if pr.Mergeable != gh.MergeableUnknown {
+			was[pr.Key()] = pr.Mergeable
+		}
+	}
+	for i, pr := range prs {
+		if v, ok := was[pr.Key()]; ok && pr.Mergeable == gh.MergeableUnknown {
+			prs[i].Mergeable = v
+		}
+	}
+	return prs
 }
 
 // handleGone turns a vanished pull request into a goodbye banner.
