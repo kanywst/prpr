@@ -273,14 +273,15 @@ func (m Model) arrivals(prs []gh.PR) map[string]bool {
 // very first list, like for arrivals, has nothing to compare against.
 //
 // The glyph is compared rather than the raw state so that a change the row
-// cannot show (EXPECTED to PENDING, say) does not mark it.
+// cannot show (EXPECTED to PENDING, say) does not mark it. A mergeable state
+// seen for the first time does not mark it either.
 func (m Model) changes(prs []gh.PR) map[string]bool {
 	if !m.ready {
 		return nil
 	}
-	had := make(map[string]string, len(m.prs))
+	had := make(map[string]gh.PR, len(m.prs))
 	for _, pr := range m.prs {
-		had[pr.Key()] = kindIcon(pr)
+		had[pr.Key()] = pr
 	}
 	out := make(map[string]bool)
 	for _, pr := range prs {
@@ -288,7 +289,13 @@ func (m Model) changes(prs []gh.PR) map[string]bool {
 		if m.arrived[k] {
 			continue
 		}
-		if was, ok := had[k]; m.changed[k] || ok && was != kindIcon(pr) {
+		was, ok := had[k]
+		if ok && was.Mergeable == gh.MergeableUnknown {
+			// Never known before (a cache written before prpr read it, or
+			// GitHub still working it out): learning it is not a change.
+			pr.Mergeable = gh.MergeableUnknown
+		}
+		if m.changed[k] || ok && kindIcon(was) != kindIcon(pr) {
 			out[k] = true
 		}
 	}

@@ -1324,3 +1324,21 @@ func TestAConflictIsAChangeAndSurvivesAnUnknownMergeable(t *testing.T) {
 		}
 	}
 }
+
+func TestAFirstKnownConflictIsNotAChange(t *testing.T) {
+	now := time.Now()
+	all := samplePRs(now) // mergeable unknown, as in a cache from before it was read
+	m := testModel(t, &fakeFetcher{me: "kanywst"})
+	m, _ = step(t, m, ownersMsg{me: "kanywst", owners: []string{"kanywst", "0-draft"}})
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: all}, at: now})
+
+	next := slices.Clone(all)
+	next[0].Mergeable = gh.MergeableConflict
+	m, _ = step(t, m, prsMsg{res: gh.Result{PRs: next}, at: now.Add(time.Minute)})
+	if len(m.changed) != 0 {
+		t.Errorf("changed = %v, want none for a conflict seen for the first time", m.changed)
+	}
+	if !strings.Contains(strings.Join(m.rowView(m.prs[0], false, 80, false), "\n"), conflictIcon) {
+		t.Error("the conflict icon is missing")
+	}
+}
