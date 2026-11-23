@@ -6,10 +6,10 @@ toolchain go1.26.11
 
 require (
 	charm.land/bubbles/v2 v2.2.1
-	charm.land/bubbletea/v2 v2.1.1
-	charm.land/lipgloss/v2 v2.1.0
+	charm.land/bubbletea/v2 v2.1.2
+	charm.land/lipgloss/v2 v2.1.1
 	github.com/atotto/clipboard v0.1.4
-	github.com/charmbracelet/x/ansi v0.11.9
+	github.com/charmbracelet/x/ansi v0.11.10
 	github.com/cli/go-gh/v2 v2.17.0
 	go.yaml.in/yaml/v3 v3.0.6
 )
