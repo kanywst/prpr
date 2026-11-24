@@ -117,3 +117,15 @@ func TestOldestFirstPutsMissingCreationTimesLast(t *testing.T) {
 		t.Errorf("oldest first = %v, want %v", got, want)
 	}
 }
+
+func TestByRepositoryIgnoresCase(t *testing.T) {
+	prs := []gh.PR{
+		{Number: 1, Repo: "Zeta/app"},
+		{Number: 2, Repo: "alpha/app"},
+		{Number: 3, Repo: "Beta/app"},
+	}
+	sortRepo.sort(prs)
+	if got, want := numbers(prs), []int{2, 3, 1}; !slices.Equal(got, want) {
+		t.Errorf("by repository = %v, want %v", got, want)
+	}
+}

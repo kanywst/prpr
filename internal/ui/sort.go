@@ -3,6 +3,7 @@ package ui
 import (
 	"cmp"
 	"slices"
+	"strings"
 
 	"github.com/kanywst/prpr/internal/gh"
 )
@@ -53,6 +54,13 @@ func (o sortOrder) sort(prs []gh.PR) {
 			return a.CreatedAt.Compare(b.CreatedAt)
 		})
 	case sortRepo:
-		slices.SortStableFunc(prs, func(a, b gh.PR) int { return cmp.Compare(a.Repo, b.Repo) })
+		// Owner and repository names are case-insensitive on GitHub, so
+		// Zeta/app belongs after alpha/app.
+		slices.SortStableFunc(prs, func(a, b gh.PR) int {
+			return cmp.Or(
+				cmp.Compare(strings.ToLower(a.Repo), strings.ToLower(b.Repo)),
+				cmp.Compare(a.Repo, b.Repo),
+			)
+		})
 	}
 }
