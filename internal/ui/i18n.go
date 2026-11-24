@@ -126,6 +126,7 @@ type Strings struct {
 	HelpDetailDown  string
 	HelpCopy        string
 	HelpRefresh     string
+	HelpSort        string
 	HelpFilter      string
 	HelpClearFilter string
 	HelpHelp        string
@@ -133,6 +134,11 @@ type Strings struct {
 	HelpQuit        string
 	HelpAccept      string
 	HelpCancel      string
+
+	// SortOldest and SortRepo name the non-default list orders in the tab
+	// row. The default, most recently updated first, has no label.
+	SortOldest string
+	SortRepo   string
 }
 
 // Catalog returns the strings for a language.
@@ -235,6 +241,7 @@ var english = Strings{
 	HelpDetailDown:  "detail down",
 	HelpCopy:        "copy URL",
 	HelpRefresh:     "refresh",
+	HelpSort:        "sort",
 	HelpFilter:      "filter",
 	HelpClearFilter: "clear filter",
 	HelpHelp:        "help",
@@ -242,6 +249,8 @@ var english = Strings{
 	HelpQuit:        "quit",
 	HelpAccept:      "apply",
 	HelpCancel:      "cancel",
+	SortOldest:      "oldest first",
+	SortRepo:        "by repository",
 }
 
 var japanese = Strings{
@@ -336,6 +345,7 @@ var japanese = Strings{
 	HelpDetailDown:  "詳細を下へ",
 	HelpCopy:        "URL コピー",
 	HelpRefresh:     "更新",
+	HelpSort:        "並び順",
 	HelpFilter:      "絞り込み",
 	HelpClearFilter: "絞り込み解除",
 	HelpHelp:        "ヘルプ",
@@ -343,4 +353,6 @@ var japanese = Strings{
 	HelpQuit:        "バイバイ",
 	HelpAccept:      "確定",
 	HelpCancel:      "やめる",
+	SortOldest:      "古い順",
+	SortRepo:        "リポジトリ順",
 }

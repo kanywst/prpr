@@ -20,6 +20,7 @@ type KeyMap struct {
 	DetailDown  key.Binding
 	Copy        key.Binding
 	Refresh     key.Binding
+	Sort        key.Binding
 	Filter      key.Binding
 	ClearFilter key.Binding
 	Help        key.Binding
@@ -45,6 +46,7 @@ func DefaultKeyMap(s Strings) KeyMap {
 		DetailDown:  key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", s.HelpDetailDown)),
 		Copy:        key.NewBinding(key.WithKeys("y"), key.WithHelp("y", s.HelpCopy)),
 		Refresh:     key.NewBinding(key.WithKeys("r"), key.WithHelp("r", s.HelpRefresh)),
+		Sort:        key.NewBinding(key.WithKeys("s"), key.WithHelp("s", s.HelpSort)),
 		Filter:      key.NewBinding(key.WithKeys("/"), key.WithHelp("/", s.HelpFilter)),
 		ClearFilter: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", s.HelpClearFilter)),
 		Help:        key.NewBinding(key.WithKeys("?"), key.WithHelp("?", s.HelpHelp)),
@@ -68,7 +70,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.PageUp, k.PageDown, k.PrevTab, k.NextTab},
 		{k.Open, k.Copy, k.Detail, k.Refresh},
 		{k.DetailUp, k.DetailDown, k.Filter, k.ClearFilter},
-		{k.Help, k.Suspend, k.Quit},
+		{k.Sort, k.Help, k.Suspend, k.Quit},
 	}
 }
 

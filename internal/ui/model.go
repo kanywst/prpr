@@ -130,6 +130,9 @@ type Model struct {
 	cursor int
 	offset int
 	tab    tabID
+	// order is how the visible list is sorted. m.prs itself always stays
+	// most recently updated first.
+	order sortOrder
 
 	mode      mode
 	loading   bool
@@ -308,6 +311,7 @@ func (m *Model) recompute() {
 			m.visible = append(m.visible, pr)
 		}
 	}
+	m.order.sort(m.visible)
 
 	m.cursor = 0
 	if anchor != "" {
