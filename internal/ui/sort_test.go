@@ -94,9 +94,26 @@ func TestSortSurvivesRefreshAndFilter(t *testing.T) {
 }
 
 func TestSortLabelFitsANarrowTabRow(t *testing.T) {
-	m := loadedModel(t, 60, 20, agedPRs(time.Now()))
-	m, _ = step(t, m, tea.KeyPressMsg{Code: 's', Text: "s"})
-	m.filter.SetValue("api docs")
-	m.recompute()
-	assertFits(t, m.render(), 60, 20)
+	for _, w := range []int{minWidth, 60} {
+		m := loadedModel(t, w, 20, agedPRs(time.Now()))
+		m, _ = step(t, m, tea.KeyPressMsg{Code: 's', Text: "s"})
+		m, _ = step(t, m, tea.KeyPressMsg{Code: 's', Text: "s"}) // by repository, the longest label
+		m.filter.SetValue("a-long-filter-query-that-hits-the-cap")
+		m.recompute()
+		assertFits(t, m.render(), w, 20)
+		// The marks must not squeeze the tabs out of their own row.
+		if out := ansi.Strip(m.render()); !strings.Contains(out, "▸ all") {
+			t.Errorf("width %d: the active tab was pushed out by the marks:\n%s", w, out)
+		}
+	}
+}
+
+func TestOldestFirstPutsMissingCreationTimesLast(t *testing.T) {
+	now := time.Now()
+	prs := agedPRs(now)
+	prs[1].CreatedAt = time.Time{} // #127, the oldest, lost its timestamp
+	sortOldest.sort(prs)
+	if got, want := numbers(prs), []int{128, 12, 127}; !slices.Equal(got, want) {
+		t.Errorf("oldest first = %v, want %v", got, want)
+	}
 }

@@ -42,7 +42,16 @@ func (o sortOrder) label(s Strings) string {
 func (o sortOrder) sort(prs []gh.PR) {
 	switch o {
 	case sortOldest:
-		slices.SortStableFunc(prs, func(a, b gh.PR) int { return a.CreatedAt.Compare(b.CreatedAt) })
+		slices.SortStableFunc(prs, func(a, b gh.PR) int {
+			// A missing creation time is not old; keep it out of the top.
+			if az, bz := a.CreatedAt.IsZero(), b.CreatedAt.IsZero(); az != bz {
+				if az {
+					return 1
+				}
+				return -1
+			}
+			return a.CreatedAt.Compare(b.CreatedAt)
+		})
 	case sortRepo:
 		slices.SortStableFunc(prs, func(a, b gh.PR) int { return cmp.Compare(a.Repo, b.Repo) })
 	}

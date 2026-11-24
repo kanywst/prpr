@@ -257,7 +257,8 @@ func (m Model) tabsView(mt metrics) string {
 	if q := m.filter.Value(); q != "" && m.mode != modeFilter {
 		marks = append(marks, m.theme.FilterIcon.Render("🔍 "+truncate(q, 20)))
 	}
-	right := strings.Join(marks, "  ")
+	// The marks give way to the tabs: they take at most half the row.
+	right := truncate(strings.Join(marks, "  "), mt.innerW/2)
 	if right == "" {
 		return truncate(left, mt.innerW)
 	}
