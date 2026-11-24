@@ -21,6 +21,7 @@ There is nothing to configure. prpr asks GitHub who you are and watches **your o
 - **Issues too, if you like.** `--issues` (or `issues: true`) mixes open issues into the list, marked 🎫, searched the same way as pull requests. They get an issues tab of their own, and the review tab becomes "your turn": review requests plus the issues assigned to you.
 - **Keeps going when an org does not answer.** An org that refuses the search (SAML SSO the token is not authorized for, say) is named in the header, and the rest of the list stays up. When an owner has more open pull requests than one search returns, the header says so too.
 - **Filtering.** `/` searches titles, repositories, authors, `#number` and labels at once. Space-separated terms are ANDed.
+- **Sorting.** `s` cycles the list between most recently updated (the default), oldest first, and by repository. The tab row names the order while it is not the default.
 - **Detail pane.** `d` shows the branch, the diff stat, reviewers and the body. Side by side at 100 columns or wider, full width when narrower.
 - **Auto refresh.** Every 60 seconds by default, with a countdown in the header.
 - **Starts instantly.** The last list is cached on disk and shown the moment prpr opens, while the first refresh runs. Pull requests merged while it was closed still get their farewell.
@@ -138,6 +139,7 @@ The cache lives in `$XDG_CACHE_HOME/prpr/cache.json`, or `~/.cache/prpr/cache.js
 | `d` | Toggle the detail pane |
 | `ctrl+u` / `ctrl+d` | Scroll the detail pane |
 | `r` | Refresh now |
+| `s` | Cycle the sort order: updated / oldest first / repository |
 | `/` | Filter |
 | `esc` | Clear the filter |
 | `?` | Expand the help |

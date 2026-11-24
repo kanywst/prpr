@@ -466,6 +466,10 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.startRefresh(m.refreshCmd())
 		}
 
+	case key.Matches(msg, m.keys.Sort):
+		m.order = m.order.next()
+		m.recompute()
+
 	case key.Matches(msg, m.keys.Filter):
 		m.mode = modeFilter
 		m.applySize()
